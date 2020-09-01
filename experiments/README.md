@@ -1,0 +1,1 @@
+This folder is an unstructured collection of experiments as a preparation for the course.
