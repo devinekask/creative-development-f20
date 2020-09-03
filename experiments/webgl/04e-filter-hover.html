@@ -7,12 +7,15 @@
   <title>WebGL</title>
 </head>
 <body>
-  <canvas id="c"></canvas>
-  <select id="kernel"></select>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.0/gsap.min.js" integrity="sha512-JO6JyFPJupQKZf7icgZkHwuq/rAQxH7COqvEd4WdK52AtHPedwHog05T69pIelI69jVN/zZbW6TuHfH2mS8j/Q==" crossorigin="anonymous"></script>
 
-  <script>
-  {
+  <canvas id="c"></canvas>
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.1/gsap.min.js" integrity="sha512-IQLehpLoVS4fNzl7IfH8Iowfm5+RiMGtHykgZJl9AWMgqx0AmJ6cRWcB+GaGVtIsnC4voMfm8f2vwtY+6oPjpQ==" crossorigin="anonymous"></script>
+  <script type="module">
+
+    import * as mat4 from "./js/gl-matrix/mat4.js";
+    import * as vec4 from "./js/gl-matrix/vec4.js";
 
     const createShader = (gl, type, source) => {
       const shader = gl.createShader(type);
@@ -40,7 +43,7 @@
     };
 
     const canvas = document.querySelector('#c');
-    const $kernel = document.querySelector('#kernel');
+
     const gl = canvas.getContext('webgl');
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, `
     precision mediump float;
@@ -59,34 +62,18 @@
     precision mediump float;
 
     uniform sampler2D texture;
-
-    uniform vec2 u_textureSize;
-
-    uniform float u_kernel[9];
-    uniform float u_kernelWeight;
+    
+    uniform mat4 matrix;
+    uniform vec4 offset;
 
     uniform float effectFactor;
 
     varying vec2 uv;
     
     void main() {
-
-      vec2 onePixel = vec2(1.0, 1.0) / u_textureSize;
-
       vec4 sampleColor = texture2D(texture, uv);
-      vec4 effectColor = (
-        texture2D(texture, uv + onePixel * vec2(-1, -1)) * u_kernel[0] +
-        texture2D(texture, uv + onePixel * vec2( 0, -1)) * u_kernel[1] +
-        texture2D(texture, uv + onePixel * vec2( 1, -1)) * u_kernel[2] +
-        texture2D(texture, uv + onePixel * vec2(-1,  0)) * u_kernel[3] +
-        texture2D(texture, uv + onePixel * vec2( 0,  0)) * u_kernel[4] +
-        texture2D(texture, uv + onePixel * vec2( 1,  0)) * u_kernel[5] +
-        texture2D(texture, uv + onePixel * vec2(-1,  1)) * u_kernel[6] +
-        texture2D(texture, uv + onePixel * vec2( 0,  1)) * u_kernel[7] +
-        texture2D(texture, uv + onePixel * vec2( 1,  1)) * u_kernel[8]
-      ) / u_kernelWeight;
-
-      gl_FragColor = vec4(mix(sampleColor, effectColor, effectFactor).rgb, 1.0);
+      vec4 filteredColor = matrix * sampleColor + offset;
+      gl_FragColor = mix(sampleColor, filteredColor, effectFactor);
     }
     `);
     const program = createProgram(gl, vertexShader, fragmentShader);
@@ -95,116 +82,21 @@
     const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
     const texCoordBuffer = gl.createBuffer();
 
+    const matrixLocation = gl.getUniformLocation(program, "matrix");
+    const offsetLocation = gl.getUniformLocation(program, "offset");
+
     const effectFactorLocation = gl.getUniformLocation(program, "effectFactor");
+
+    const matrix = mat4.fromValues(
+      0.590999960899353, 0.5235000252723694, 0.40800002217292786, 0, 
+      1.153499960899353, 1.0290000438690186, 0.8009999990463257, 0, 
+      0.28349998593330383, 0.25200000405311584, 0.1965000033378601, 0, 
+      0, 0, 0, 1.5
+    );
+    const offset = vec4.fromValues(-0.25, -0.25, -0.25, 0);
+
     const properties = {
-      effectFactor: 1
-    };
-
-    const u_textureSizeLocation = gl.getUniformLocation(program, "u_textureSize");
-    const u_kernelLocation = gl.getUniformLocation(program, "u_kernel[0]");
-    const u_kernelWeightLocation = gl.getUniformLocation(program, "u_kernelWeight");
-
-    const kernels = {
-      normal: [
-        0, 0, 0,
-        0, 1, 0,
-        0, 0, 0
-      ],
-      gaussianBlur: [
-        0.045, 0.122, 0.045,
-        0.122, 0.332, 0.122,
-        0.045, 0.122, 0.045
-      ],
-      gaussianBlur2: [
-        1, 2, 1,
-        2, 4, 2,
-        1, 2, 1
-      ],
-      gaussianBlur3: [
-        0, 1, 0,
-        1, 1, 1,
-        0, 1, 0
-      ],
-      unsharpen: [
-        -1, -1, -1,
-        -1,  9, -1,
-        -1, -1, -1
-      ],
-      sharpness: [
-        0,-1, 0,
-        -1, 5,-1,
-        0,-1, 0
-      ],
-      sharpen: [
-        -1, -1, -1,
-        -1, 16, -1,
-        -1, -1, -1
-      ],
-      edgeDetect: [
-        -0.125, -0.125, -0.125,
-        -0.125,  1,     -0.125,
-        -0.125, -0.125, -0.125
-      ],
-      edgeDetect2: [
-        -1, -1, -1,
-        -1,  8, -1,
-        -1, -1, -1
-      ],
-      edgeDetect3: [
-        -5, 0, 0,
-          0, 0, 0,
-          0, 0, 5
-      ],
-      edgeDetect4: [
-        -1, -1, -1,
-          0,  0,  0,
-          1,  1,  1
-      ],
-      edgeDetect5: [
-        -1, -1, -1,
-          2,  2,  2,
-        -1, -1, -1
-      ],
-      edgeDetect6: [
-        -5, -5, -5,
-        -5, 39, -5,
-        -5, -5, -5
-      ],
-      sobelHorizontal: [
-          1,  2,  1,
-          0,  0,  0,
-        -1, -2, -1
-      ],
-      sobelVertical: [
-          1,  0, -1,
-          2,  0, -2,
-          1,  0, -1
-      ],
-      previtHorizontal: [
-          1,  1,  1,
-          0,  0,  0,
-        -1, -1, -1
-      ],
-      previtVertical: [
-          1,  0, -1,
-          1,  0, -1,
-          1,  0, -1
-      ],
-      boxBlur: [
-          0.111, 0.111, 0.111,
-          0.111, 0.111, 0.111,
-          0.111, 0.111, 0.111
-      ],
-      triangleBlur: [
-          0.0625, 0.125, 0.0625,
-          0.125,  0.25,  0.125,
-          0.0625, 0.125, 0.0625
-      ],
-      emboss: [
-        -2, -1,  0,
-        -1,  1,  1,
-          0,  1,  2
-      ]
+      effectFactor: 0
     };
 
     const init = async () => {
@@ -246,30 +138,16 @@
 
       uploadImageToTexture(imgTexture, "texture", 0);
 
-      gl.uniform2f(u_textureSizeLocation, imgTexture.width, imgTexture.height);
-
-      for (const kernelName in kernels) {
-        if (kernels.hasOwnProperty(kernelName)) {
-          const filter = kernels[kernelName];
-          const $option = document.createElement('option');
-          $option.textContent = kernelName;
-          $option.value = kernelName;
-          $kernel.appendChild($option);
-        }
-      }
-
-      $kernel.addEventListener('input', (e) => {
-        const kernel = kernels[e.currentTarget.value];
-        gl.uniform1fv(u_kernelLocation, kernel);
-        gl.uniform1f(u_kernelWeightLocation, computeKernelWeight(kernel));
-      });
-      
-      const kernel = kernels.normal;
-      gl.uniform1fv(u_kernelLocation, kernel);
-      gl.uniform1f(u_kernelWeightLocation, computeKernelWeight(kernel));
-
       canvas.width = imgTexture.width;
       canvas.height = imgTexture.height;
+
+      canvas.addEventListener('mouseover', e => {
+        gsap.to(properties, { duration: 1, ease: "power4.out", effectFactor: 1});
+      });
+
+      canvas.addEventListener('mouseout', e => {
+        gsap.to(properties, { duration: 1, ease: "power4.out", effectFactor: 0});
+      });
 
       drawScene();
     };
@@ -279,6 +157,9 @@
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.useProgram(program);
+
+      gl.uniformMatrix4fv(matrixLocation, false, matrix);
+      gl.uniform4fv(offsetLocation, offset);
 
       gl.uniform1f(effectFactorLocation, properties.effectFactor);
 
@@ -295,6 +176,8 @@
         img.src = src;
       });
     };
+
+    const map = (value, x1, y1, x2, y2) => (value - x1) * (y2 - x2) / (y1 - x1) + x2;
 
     const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
       const u_imageLoc = gl.getUniformLocation(program, uniformName);
@@ -314,13 +197,7 @@
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
     };
 
-    const computeKernelWeight = (kernel) => {
-      const weight = kernel.reduce((prev, curr) => prev + curr);
-      return weight <= 0 ? 1 : weight;
-    }
-
     init();
-  }
   </script>
 </body>
 </html>

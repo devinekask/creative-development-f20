@@ -5,18 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>WebGL</title>
-  <style>
-    canvas {
-      width: 100%;
-      height: auto;
-    }
-  </style>
 </head>
 <body>
   <canvas id="c"></canvas>
 
-  <script>
-  {
+  <div>
+    <input type="range" id="brightness" min="-1" max="1" step="0.1" />Brightness<br />
+    <input type="range" id="contrast" min="0" max="2" step="0.1" />Contrast<br />
+    <input type="range" id="exposure" min="0" max="2" step="0.1" />Exposure<br />
+    <input type="range" id="saturation" min="0" max="2" step="0.1" />Saturation<br />
+  </div>
+
+  <script type="module">
+
+    import * as mat4 from "./js/gl-matrix/mat4.js";
+    import * as vec4 from "./js/gl-matrix/vec4.js";
 
     const createShader = (gl, type, source) => {
       const shader = gl.createShader(type);
@@ -44,6 +47,12 @@
     };
 
     const canvas = document.querySelector('#c');
+
+    const $brightness = document.getElementById('brightness');
+    const $contrast = document.getElementById('contrast');
+    const $exposure = document.getElementById('exposure');
+    const $saturation = document.getElementById('saturation');
+
     const gl = canvas.getContext('webgl');
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, `
     precision mediump float;
@@ -62,41 +71,15 @@
     precision mediump float;
 
     uniform sampler2D texture;
-    uniform sampler2D mask;
-
-    uniform vec2 textureSize;
-    uniform vec2 maskSize;
-
-    uniform vec2 maskOffset;
-
-    uniform float phase;
-    uniform float effectFactor;
+    
+    uniform mat4 matrix;
+    uniform vec4 offset;
 
     varying vec2 uv;
     
     void main() {
-      vec2 leftUV = vec2(uv.x / 2.0, uv.y);
-      vec2 rightUV = vec2(uv.x / 2.0 + 0.5, uv.y);
-
-      vec4 sampleColor = texture2D(texture, leftUV);
-
-      float distance = length( uv - vec2(0.5));
-      vec4 disp = vec4(0.01, 0.01, 0.01, 0.01);
-      disp.rgb *= sin(distance*25.0+phase);
-
-      vec2 distortedPosition = vec2(uv.x + disp.r * effectFactor, uv.y + disp.r * effectFactor);
-
-      vec2 maskScale = maskSize / textureSize;
-      vec2 maskCoord = (distortedPosition - maskOffset) / maskScale;
-
-      vec4 maskColor = texture2D(mask, maskCoord);
-
-      if (maskCoord.x > 1.0) maskColor.r = 0.0;
-      if (maskCoord.x < 0.0) maskColor.r = 0.0;
-      if (maskCoord.y > 1.0) maskColor.r = 0.0;
-      if (maskCoord.y < 0.0) maskColor.r = 0.0;
-      
-      gl_FragColor = mix(texture2D(texture, leftUV), texture2D(texture, rightUV), maskColor.r);
+      vec4 sampleColor = texture2D(texture, uv);
+      gl_FragColor = matrix * sampleColor + offset;
     }
     `);
     const program = createProgram(gl, vertexShader, fragmentShader);
@@ -105,19 +88,26 @@
     const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
     const texCoordBuffer = gl.createBuffer();
 
-    const textureSizeLocation = gl.getUniformLocation(program, "textureSize");
-    const maskSizeLocation = gl.getUniformLocation(program, "maskSize");
-    const maskOffsetLocation = gl.getUniformLocation(program, "maskOffset");
+    const matrixLocation = gl.getUniformLocation(program, "matrix");
+    const offsetLocation = gl.getUniformLocation(program, "offset");
 
-    const phaseLocation = gl.getUniformLocation(program, "phase");
-    const effectFactorLocation = gl.getUniformLocation(program, "effectFactor");
+    const matrix = mat4.create();
+    const offset = vec4.create();
 
-    let maskX = 0.5, maskY = 0.5;
-    let frameNr = 0;
+    const u_brightnessMatrix = mat4.create();
+    const u_brightnessOffset = vec4.create();
+
+    const u_contrastMatrix = mat4.create();
+    const u_contrastOffset = vec4.create();
+
+    const u_exposureMatrix = mat4.create();
+    const u_exposureOffset = vec4.create();
+
+    const u_saturationMatrix = mat4.create();
+    const u_saturationOffset = vec4.create();
 
     const init = async () => {
-      const imgTexture = await loadImage("images/vw.jpg");
-      const imgMask = await loadImage("images/mask.jpg");
+      const imgTexture = await loadImage("images/devine_selectie-087.jpg");
 
       gl.useProgram(program);
 
@@ -154,39 +144,94 @@
       gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
 
       uploadImageToTexture(imgTexture, "texture", 0);
-      uploadImageToTexture(imgMask, "mask", 1);
 
-      gl.uniform2f(textureSizeLocation, imgTexture.width / 2, imgTexture.height);
-      gl.uniform2f(maskSizeLocation, imgMask.width, imgMask.height);
-
-      canvas.width = imgTexture.width / 2;
+      canvas.width = imgTexture.width;
       canvas.height = imgTexture.height;
 
-      canvas.addEventListener('mousemove', e => {
-        const canvasSize = canvas.getBoundingClientRect();
-        const scale = canvas.width / canvasSize.width;
-        maskX = (scale * e.layerX - imgMask.width / 2) / canvas.width;
-        maskY = (scale * e.layerY - imgMask.height / 2) / canvas.height;
+      $brightness.addEventListener('input', e => {
+        const value = $brightness.value;
+        u_brightnessOffset[0] = value;
+        u_brightnessOffset[1] = value;
+        u_brightnessOffset[2] = value;
+      });
 
-        gl.uniform2f(maskOffsetLocation, maskX, maskY);
+      $contrast.addEventListener('input', e => {
+        const x = $contrast.value;
+        const y = (1 - x) / 2;
+
+        u_contrastMatrix[0] = x;
+        u_contrastMatrix[5] = x;
+        u_contrastMatrix[10] = x;
+        u_contrastMatrix[15] = x;
+
+        u_contrastOffset[0] = y;
+        u_contrastOffset[1] = y;
+        u_contrastOffset[2] = y;
+      });
+
+      $exposure.addEventListener('input', e => {
+        const x = $exposure.value;
+
+        u_exposureMatrix[0] = x;
+        u_exposureMatrix[5] = x;
+        u_exposureMatrix[10] = x;
+        u_exposureMatrix[15] = x;
+      });
+
+      $saturation.addEventListener('input', e => {
+        // https://www.w3.org/TR/WCAG20/#relativeluminancedef
+        const lr = 0.2126;
+        const lg = 0.7152;
+        const lb = 0.0722;
+
+        const s = parseFloat($saturation.value);
+        const sr = (1 - s) * lr;
+        const sg = (1 - s) * lg;
+        const sb = (1 - s) * lb;
+
+        u_saturationMatrix[0] = sr+s;
+        u_saturationMatrix[1] = sg;
+        u_saturationMatrix[2] = sb;
+
+        u_saturationMatrix[4] = sr;
+        u_saturationMatrix[5] = sg+s;
+        u_saturationMatrix[6] = sb;
+
+        u_saturationMatrix[8] = sr;
+        u_saturationMatrix[9] = sg;
+        u_saturationMatrix[10] = sb+s;
 
       });
 
-      gl.uniform2f(maskOffsetLocation, maskX, maskY);
 
       drawScene();
     };
 
     const drawScene = () => {
-      frameNr++;
-
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-      gl.clearColor(0.0, 0.0, 0.0, 1);
+      gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.useProgram(program);
 
-      gl.uniform1f(phaseLocation, frameNr / 20);
-      gl.uniform1f(effectFactorLocation, 1.0);
+      mat4.identity(matrix);
+      mat4.multiply(matrix, matrix, u_brightnessMatrix);
+      mat4.multiply(matrix, matrix, u_contrastMatrix);
+      mat4.multiply(matrix, matrix, u_exposureMatrix);
+
+      const saturationTransposed = mat4.create();
+      mat4.transpose(saturationTransposed, u_saturationMatrix);
+
+      
+      mat4.multiply(matrix, matrix, saturationTransposed);
+
+      vec4.zero(offset);
+      vec4.add(offset, offset, u_brightnessOffset);
+      vec4.add(offset, offset, u_contrastOffset);
+      vec4.add(offset, offset, u_exposureOffset);
+      vec4.add(offset, offset, u_saturationOffset);
+
+      gl.uniformMatrix4fv(matrixLocation, false, matrix);
+      gl.uniform4fv(offsetLocation, offset);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -201,6 +246,8 @@
         img.src = src;
       });
     };
+
+    const map = (value, x1, y1, x2, y2) => (value - x1) * (y2 - x2) / (y1 - x1) + x2;
 
     const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
       const u_imageLoc = gl.getUniformLocation(program, uniformName);
@@ -221,7 +268,6 @@
     };
 
     init();
-  }
   </script>
 </body>
 </html>

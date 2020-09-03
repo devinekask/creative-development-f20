@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>WebGL</title>
+  <style>
+    body {
+      background-color: red;
+    }
+  </style>
 </head>
 <body>
   <canvas id="c"></canvas>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.0/gsap.min.js" integrity="sha512-JO6JyFPJupQKZf7icgZkHwuq/rAQxH7COqvEd4WdK52AtHPedwHog05T69pIelI69jVN/zZbW6TuHfH2mS8j/Q==" crossorigin="anonymous"></script>
 
   <script>
   {
@@ -39,7 +43,6 @@
     };
 
     const canvas = document.querySelector('#c');
-
     const gl = canvas.getContext('webgl');
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, `
     precision mediump float;
@@ -58,23 +61,24 @@
     precision mediump float;
 
     uniform sampler2D texture;
+    uniform sampler2D maskTexture;
 
-    uniform mat4 u_contrastMatrix;
-    uniform vec4 u_contrastOffset;
-
-    uniform mat4 u_filterMatrix;
-    uniform vec4 u_filterOffset;
-
-    uniform float effectFactor;
+    uniform vec2 textureSize;
+    uniform vec2 maskSize;
+    uniform vec2 maskOffset;
 
     varying vec2 uv;
     
     void main() {
-      vec4 texel = texture2D(texture, uv);
-      mat4 matrix = u_contrastMatrix * u_filterMatrix;
-      vec4 offset = u_contrastOffset + u_filterOffset;
 
-      gl_FragColor = mix(texel, matrix * texel + offset, effectFactor);
+      vec2 maskScale = maskSize / textureSize;
+
+      vec4 sampleColor = texture2D(texture, uv);
+
+      vec2 maskCoord = (uv - maskOffset) / maskScale;
+      vec4 maskColor = texture2D(maskTexture, maskCoord);
+
+      gl_FragColor = sampleColor * maskColor.r;
     }
     `);
     const program = createProgram(gl, vertexShader, fragmentShader);
@@ -83,35 +87,13 @@
     const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
     const texCoordBuffer = gl.createBuffer();
 
-    const effectFactorLocation = gl.getUniformLocation(program, "effectFactor");
-    const properties = {
-      effectFactor: 1
-    };
-
-    const u_contrastMatrixLocation = gl.getUniformLocation(program, "u_contrastMatrix");
-    const u_contrastOffsetLocation = gl.getUniformLocation(program, "u_contrastOffset");
-
-    const u_filterMatrixLocation = gl.getUniformLocation(program, "u_filterMatrix");
-    const u_filterOffsetLocation = gl.getUniformLocation(program, "u_filterOffset");
-
-    const u_contrastMatrix = [
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      0, 0, 0, 1
-    ];
-    const u_contrastOffset = [0, 0, 0, 1];
-
-    let u_filterMatrix = [
-        0.394, 0.769, 0.189, 0.000,
-        0.349, 0.686, 0.168, 0.000,
-        0.272, 0.534, 0.131, 0.000,
-        0.000, 0.000, 0.000, 1.000,
-    ];
-    let u_filterOffset = [0, 0, 0, 0];
+    const textureSizeLocation = gl.getUniformLocation(program, "textureSize");
+    const maskSizeLocation = gl.getUniformLocation(program, "maskSize");
+    const maskOffsetLocation = gl.getUniformLocation(program, "maskOffset");
 
     const init = async () => {
       const imgTexture = await loadImage("images/devine_selectie-087.jpg");
+      const maskTexture = await loadImage("images/mask.jpg");
 
       gl.useProgram(program);
 
@@ -148,99 +130,31 @@
       gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
 
       uploadImageToTexture(imgTexture, "texture", 0);
+      uploadImageToTexture(maskTexture, "maskTexture", 1);
+
+      gl.uniform2f(textureSizeLocation, imgTexture.width, imgTexture.height);
+      gl.uniform2f(maskSizeLocation, maskTexture.width, maskTexture.height);
 
       canvas.width = imgTexture.width;
       canvas.height = imgTexture.height;
 
-      // contrast
-      const value = 1.3;
-      const y = (1 - value) / 2
-      u_contrastMatrix[0] = value;
-      u_contrastMatrix[5] = value;
-      u_contrastMatrix[10] = value;
-      u_contrastOffset[0] = y;
-      u_contrastOffset[1] = y;
-      u_contrastOffset[2] = y;
+      canvas.addEventListener('mousemove', e => {
+        const maskX = (e.layerX - maskTexture.width / 2) / canvas.width;
+        const maskY = (e.layerY - maskTexture.height / 2) / canvas.height;
 
-      const sepia = [
-          0.394, 0.769, 0.189, 0.000, 0.000,
-          0.349, 0.686, 0.168, 0.000, 0.000,
-          0.272, 0.534, 0.131, 0.000, 0.000,
-          0.000, 0.000, 0.000, 1.000, 0.000
-      ];
+        console.log(maskX, maskY);
 
-      transpose(u_filterMatrix, [
-        sepia[0], sepia[1], sepia[2], sepia[3],
-        sepia[5], sepia[6], sepia[7], sepia[8],
-        sepia[10], sepia[11], sepia[12], sepia[13],
-        sepia[15], sepia[16], sepia[17], sepia[18],
-      ]);
-      u_filterOffset = [ sepia[4],sepia[9], sepia[14], sepia[19] ];
-
-      canvas.addEventListener('mouseover', () => gsap.to(properties, { duration: 1, ease: Power4.easeOut, effectFactor: 0}));
-      canvas.addEventListener('mouseout', () => gsap.to(properties, { duration: 1, ease: Power4.easeOut, effectFactor: 1}));
+        gl.uniform2f(maskOffsetLocation, maskX, maskY);
+      });
 
       drawScene();
     };
-
-    const map = (value, x1, y1, x2, y2) => (value - x1) * (y2 - x2) / (y1 - x1) + x2;
-
-    const transpose = (out, a) => {
-      // If we are transposing ourselves we can skip a few steps but have to cache some values
-      if (out === a) {
-          let a01 = a[1],
-              a02 = a[2],
-              a03 = a[3];
-          let a12 = a[6],
-              a13 = a[7];
-          let a23 = a[11];
-
-          out[1] = a[4];
-          out[2] = a[8];
-          out[3] = a[12];
-          out[4] = a01;
-          out[6] = a[9];
-          out[7] = a[13];
-          out[8] = a02;
-          out[9] = a12;
-          out[11] = a[14];
-          out[12] = a03;
-          out[13] = a13;
-          out[14] = a23;
-      } else {
-          out[0] = a[0];
-          out[1] = a[4];
-          out[2] = a[8];
-          out[3] = a[12];
-          out[4] = a[1];
-          out[5] = a[5];
-          out[6] = a[9];
-          out[7] = a[13];
-          out[8] = a[2];
-          out[9] = a[6];
-          out[10] = a[10];
-          out[11] = a[14];
-          out[12] = a[3];
-          out[13] = a[7];
-          out[14] = a[11];
-          out[15] = a[15];
-      }
-
-      return out;
-  }
 
     const drawScene = () => {
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.useProgram(program);
-
-      gl.uniform1f(effectFactorLocation, properties.effectFactor);
-
-      gl.uniformMatrix4fv(u_contrastMatrixLocation, false, u_contrastMatrix);
-      gl.uniform4fv(u_contrastOffsetLocation, u_contrastOffset);
-      gl.uniformMatrix4fv(u_filterMatrixLocation, false, u_filterMatrix);
-      gl.uniform4fv(u_filterOffsetLocation, u_filterOffset);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -255,6 +169,8 @@
         img.src = src;
       });
     };
+
+    const map = (value, x1, y1, x2, y2) => (value - x1) * (y2 - x2) / (y1 - x1) + x2;
 
     const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
       const u_imageLoc = gl.getUniformLocation(program, uniformName);

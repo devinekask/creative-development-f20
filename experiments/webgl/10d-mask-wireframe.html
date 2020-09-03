@@ -6,20 +6,17 @@
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>WebGL</title>
   <style>
-    .visually-hidden {
-      clip: rect(0 0 0 0);
-      clip-path: inset(50%);
-      height: 1px;
-      overflow: hidden;
-      position: absolute;
-      white-space: nowrap;
-      width: 1px;
+    body {
+      background-color: red;
+    }
+    canvas {
+      width: 100%;
+      height: auto;
     }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
-  <video id="video" src="videos/showreel-2020.mp4" autoplay muted playsinline class="visually-hidden"></video>
 
   <script>
   {
@@ -50,7 +47,6 @@
     };
 
     const canvas = document.querySelector('#c');
-    const video = document.querySelector('#video');
     const gl = canvas.getContext('webgl');
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, `
     precision mediump float;
@@ -69,11 +65,40 @@
     precision mediump float;
 
     uniform sampler2D texture;
+    uniform sampler2D maskTexture;
+
+    uniform vec2 textureSize;
+    uniform vec2 maskSize;
+    uniform vec2 maskOffset;
+
+    uniform float dispFactor;
+    uniform float effectFactor;
+
+    uniform float phase;
 
     varying vec2 uv;
     
     void main() {
-      gl_FragColor = texture2D(texture, uv);
+
+      vec2 maskScale = maskSize / textureSize;
+
+      vec2 leftUV = vec2(uv.x / 2.0, uv.y);
+      vec2 rightUV = vec2(uv.x / 2.0 + 0.5, uv.y);
+
+      vec4 sampleColor = texture2D(texture, leftUV);
+      vec4 sampleRightColor = texture2D(texture, rightUV);
+
+      float distance = length(uv - vec2(0.5, 0.5));
+
+      vec4 disp = vec4(0.02, 0.02, 0.02, 0.02);
+      disp.rgb *= sin(distance * 20.0 + phase);
+
+      vec2 distortedPosition = vec2(uv.x + dispFactor * (disp.r*effectFactor), uv.y);
+
+      vec2 maskCoord = (distortedPosition - maskOffset) / maskScale;
+      vec4 maskColor = texture2D(maskTexture, maskCoord);
+
+      gl_FragColor = mix(sampleColor, sampleRightColor, maskColor.r);
     }
     `);
     const program = createProgram(gl, vertexShader, fragmentShader);
@@ -82,9 +107,25 @@
     const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
     const texCoordBuffer = gl.createBuffer();
 
-    const textures = {};
+    const textureSizeLocation = gl.getUniformLocation(program, "textureSize");
+    const maskSizeLocation = gl.getUniformLocation(program, "maskSize");
+    const maskOffsetLocation = gl.getUniformLocation(program, "maskOffset");
+
+    const effectFactorLocation = gl.getUniformLocation(program, "effectFactor");
+    const dispFactorLocation = gl.getUniformLocation(program, "dispFactor");
+
+    const phaseLocation = gl.getUniformLocation(program, "phase");
+
+    const properties = {
+      effectFactor: -0.65,
+      dispFactor: 1.0
+    };
+
+    let phase = 0;
 
     const init = async () => {
+      const imgTexture = await loadImage("images/vw.jpg");
+      const maskTexture = await loadImage("images/mask.jpg");
 
       gl.useProgram(program);
 
@@ -120,30 +161,42 @@
       gl.enableVertexAttribArray(texCoordAttributeLocation);
       gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
 
-      video.addEventListener('loadeddata', () => {
-        if(video.readyState < 2) {
-          return;
-        }
+      uploadImageToTexture(imgTexture, "texture", 0);
+      uploadImageToTexture(maskTexture, "maskTexture", 1);
 
-        video.play();
-        
-        uploadImageToTexture(video, "texture", 0);
+      gl.uniform2f(textureSizeLocation, imgTexture.width / 2, imgTexture.height);
+      gl.uniform2f(maskSizeLocation, maskTexture.width, maskTexture.height);
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+      canvas.width = imgTexture.width / 2;
+      canvas.height = imgTexture.height;
 
-        drawScene();        
+      gl.uniform1f(effectFactorLocation, properties.effectFactor);
+      gl.uniform1f(dispFactorLocation, properties.dispFactor);
+
+      canvas.addEventListener('mousemove', e => {
+        const canvasSize = canvas.getBoundingClientRect();
+        const canvasScale = canvas.width / canvasSize.width;
+
+        const maskX = (canvasScale * e.layerX - maskTexture.width / 2) / canvas.width;
+        const maskY = (canvasScale * e.layerY - maskTexture.height / 2) / canvas.height;
+
+        console.log(maskX, maskY);
+
+        gl.uniform2f(maskOffsetLocation, maskX, maskY);
       });
 
+      drawScene();
     };
 
     const drawScene = () => {
+      phase++;
+
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.useProgram(program);
 
-      uploadImageToTexture(video, "texture", 0);
+      gl.uniform1f(phaseLocation, phase / 10);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -159,16 +212,15 @@
       });
     };
 
+    const map = (value, x1, y1, x2, y2) => (value - x1) * (y2 - x2) / (y1 - x1) + x2;
+
     const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
       const u_imageLoc = gl.getUniformLocation(program, uniformName);
       gl.uniform1i(u_imageLoc, textureUnitIndex);
 
-      if (!textures[uniformName]) {
-        textures[uniformName] =  gl.createTexture();
-      }
-
+      const texture = gl.createTexture();
       gl.activeTexture(gl.TEXTURE0 + textureUnitIndex);
-      gl.bindTexture(gl.TEXTURE_2D, textures[uniformName]);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
     
       // Set the parameters so we can render any size image.
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
