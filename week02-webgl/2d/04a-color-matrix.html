@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>WebGL</title>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div>
+    <input type="range" id="brightness" min="-1" max="1" step="0.01" /> Brightness<br />
+    <input type="range" id="contrast" min="0" max="2" step="0.01" /> Contrast<br />
+    <input type="range" id="exposure" min="0" max="2" step="0.01" /> Exposure<br />
+    <input type="range" id="saturation" min="0" max="2" step="0.01" /> Saturation<br />
+  </div>
+
+  <script>
+  {
+
+    const createShader = (gl, type, source) => {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+      if (success) {
+        return shader;
+      }
+      console.error(gl.getShaderInfoLog(shader));
+      gl.deleteShader(shader);
+    };
+
+    const createProgram = (gl, vertexShader, fragmentShader) => {
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      const success = gl.getProgramParameter(program, gl.LINK_STATUS);
+      if (success) {
+        return program;
+      }
+      console.error(gl.getProgramInfoLog(program));
+      gl.deleteProgram(program);
+    };
+
+    const canvas = document.querySelector('#c');
+    const $brightness = document.querySelector('#brightness');
+    const $contrast = document.querySelector('#contrast');
+    const $exposure = document.querySelector('#exposure');
+    const $saturation = document.querySelector('#saturation');
+
+    const gl = canvas.getContext('webgl');
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, `
+    precision mediump float;
+    
+    attribute vec2 a_position;
+    attribute vec2 a_texCoord;
+
+    varying vec2 uv;
+    
+    void main() {     
+      gl_Position = vec4(a_position, 1, 1);
+      uv = a_texCoord;
+    }
+    `);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, `
+    precision mediump float;
+
+    uniform sampler2D texture;
+
+    uniform mat4 u_brightnessMatrix;
+    uniform vec4 u_brightnessOffset;
+    uniform mat4 u_contrastMatrix;
+    uniform vec4 u_contrastOffset;
+    uniform mat4 u_exposureMatrix;
+    uniform vec4 u_exposureOffset;
+    uniform mat4 u_saturationMatrix;
+    uniform vec4 u_saturationOffset;
+
+    varying vec2 uv;
+    
+    void main() {
+      vec4 texel = texture2D(texture, uv);
+      mat4 matrix = u_brightnessMatrix * u_contrastMatrix * u_exposureMatrix * u_saturationMatrix;
+      vec4 offset = u_brightnessOffset + u_contrastOffset + u_exposureOffset + u_saturationOffset;
+
+      gl_FragColor = matrix * texel + offset;
+    }
+    `);
+    const program = createProgram(gl, vertexShader, fragmentShader);
+    const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+    const positionBuffer = gl.createBuffer();
+    const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
+    const texCoordBuffer = gl.createBuffer();
+
+    const u_brightnessMatrixLocation = gl.getUniformLocation(program, "u_brightnessMatrix");
+    const u_brightnessOffsetLocation = gl.getUniformLocation(program, "u_brightnessOffset");
+
+    const u_contrastMatrixLocation = gl.getUniformLocation(program, "u_contrastMatrix");
+    const u_contrastOffsetLocation = gl.getUniformLocation(program, "u_contrastOffset");
+    
+    const u_exposureMatrixLocation = gl.getUniformLocation(program, "u_exposureMatrix");
+    const u_exposureOffsetLocation = gl.getUniformLocation(program, "u_exposureOffset");
+
+    const u_saturationMatrixLocation = gl.getUniformLocation(program, "u_saturationMatrix");
+    const u_saturationOffsetLocation = gl.getUniformLocation(program, "u_saturationOffset");
+
+    const u_brightnessMatrix = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ];
+    const u_brightnessOffset = [0, 0, 0, 1];
+
+    const u_contrastMatrix = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ];
+    const u_contrastOffset = [0, 0, 0, 1];
+
+    const u_exposureMatrix = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ];
+    const u_exposureOffset = [0, 0, 0, 1];
+
+    const u_saturationMatrix = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ];
+    const u_saturationOffset = [0, 0, 0, 1];
+
+    const init = async () => {
+      const imgTexture = await loadImage("images/devine_selectie-087.jpg");
+
+      gl.useProgram(program);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([
+            -1.0, 1.0,
+            1.0, 1.0,
+            -1.0, -1.0,
+
+            -1.0, -1.0,
+            1.0, 1.0,
+            1.0, -1.0
+        ]),
+        gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(positionAttributeLocation);
+      gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([
+            0.0, 0.0,
+            1.0, 0.0,
+            0.0, 1.0,
+
+            0.0, 1.0,
+            1.0, 0.0,
+            1.0, 1.0,
+        ]),
+        gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(texCoordAttributeLocation);
+      gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+      uploadImageToTexture(imgTexture, "texture", 0);
+
+      canvas.width = imgTexture.width;
+      canvas.height = imgTexture.height;
+
+      $brightness.addEventListener('input', (e) => {
+        const y = parseFloat(e.target.value);
+        u_brightnessOffset[0] = y;
+        u_brightnessOffset[1] = y;
+        u_brightnessOffset[2] = y;
+      });
+
+      $contrast.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        const y = (1 - value) / 2
+        u_contrastMatrix[0] = value;
+        u_contrastMatrix[5] = value;
+        u_contrastMatrix[10] = value;
+        u_contrastOffset[0] = y;
+        u_contrastOffset[1] = y;
+        u_contrastOffset[2] = y;
+      });
+
+      $exposure.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        u_exposureMatrix[0] = value;
+        u_exposureMatrix[5] = value;
+        u_exposureMatrix[10] = value;
+      });
+
+      $saturation.addEventListener('input', (e) => {
+        const s = parseFloat(e.target.value);
+        // https://www.w3.org/TR/WCAG20/#relativeluminancedef
+        const lr = 0.2126;
+        const lg = 0.7152;
+        const lb = 0.0722;
+        
+        const sr = (1 - s) * lr;
+        const sg = (1 - s) * lg;
+        const sb = (1 - s) * lb;
+
+        transpose(u_saturationMatrix, [
+          sr + s, sg    , sb    , 0,
+          sr    , sg + s, sb    , 0,
+          sr    , sg    , sb + s, 0,
+          0     , 0     , 0     , 1,
+        ]);
+      });
+
+      drawScene();
+    };
+
+    const map = (value, x1, y1, x2, y2) => (value - x1) * (y2 - x2) / (y1 - x1) + x2;
+
+    const transpose = (out, a) => {
+      // If we are transposing ourselves we can skip a few steps but have to cache some values
+      if (out === a) {
+          let a01 = a[1],
+              a02 = a[2],
+              a03 = a[3];
+          let a12 = a[6],
+              a13 = a[7];
+          let a23 = a[11];
+
+          out[1] = a[4];
+          out[2] = a[8];
+          out[3] = a[12];
+          out[4] = a01;
+          out[6] = a[9];
+          out[7] = a[13];
+          out[8] = a02;
+          out[9] = a12;
+          out[11] = a[14];
+          out[12] = a03;
+          out[13] = a13;
+          out[14] = a23;
+      } else {
+          out[0] = a[0];
+          out[1] = a[4];
+          out[2] = a[8];
+          out[3] = a[12];
+          out[4] = a[1];
+          out[5] = a[5];
+          out[6] = a[9];
+          out[7] = a[13];
+          out[8] = a[2];
+          out[9] = a[6];
+          out[10] = a[10];
+          out[11] = a[14];
+          out[12] = a[3];
+          out[13] = a[7];
+          out[14] = a[11];
+          out[15] = a[15];
+      }
+
+      return out;
+  }
+
+    const drawScene = () => {
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(program);
+
+      gl.uniformMatrix4fv(u_brightnessMatrixLocation, false, u_brightnessMatrix);
+      gl.uniform4fv(u_brightnessOffsetLocation, u_brightnessOffset);
+      gl.uniformMatrix4fv(u_contrastMatrixLocation, false, u_contrastMatrix);
+      gl.uniform4fv(u_contrastOffsetLocation, u_contrastOffset);
+      gl.uniformMatrix4fv(u_exposureMatrixLocation, false, u_exposureMatrix);
+      gl.uniform4fv(u_exposureOffsetLocation, u_exposureOffset);
+      gl.uniformMatrix4fv(u_saturationMatrixLocation, false, u_saturationMatrix);
+      gl.uniform4fv(u_saturationOffsetLocation, u_saturationOffset);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      requestAnimationFrame(drawScene);
+    };
+
+    const loadImage = (src) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.addEventListener("load", () => resolve(img));
+        img.addEventListener("error", err => reject(err));
+        img.src = src;
+      });
+    };
+
+    const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
+      const u_imageLoc = gl.getUniformLocation(program, uniformName);
+      gl.uniform1i(u_imageLoc, textureUnitIndex);
+
+      const texture = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0 + textureUnitIndex);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+      // Set the parameters so we can render any size image.
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    
+      // Upload the image into the texture.
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    };
+
+    init();
+  }
+  </script>
+</body>
+</html>
