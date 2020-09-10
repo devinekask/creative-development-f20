@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Socket.io Desktop</title>
+  <style>
+    html {
+      box-sizing: border-box;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    .cursor {
+      position: absolute;
+      width: 1rem;
+      height: 1rem;
+      margin-left: -.5rem;
+      margin-right: -.5rem;
+      background: red;
+      border-radius: 50% 50%;
+    }
+  </style>
+</head>
+<body>
+  <a id="url" href=""></a>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+  {
+    const $messages = document.getElementById('messages');
+    const $url = document.getElementById('url');
+    
+    let socket; // will be assigned a value later
+    
+    const init = () => {
+      socket = io.connect('/');
+      socket.on('connect', () => {
+        console.log(`Connected: ${socket.id}`);
+        const url = `${new URL(`/controller.html?id=${socket.id}`, window.location)}`;
+        $url.textContent = url;
+        $url.setAttribute('href', url);
+      });
+
+      socket.on(`update`, data => {
+        let $cursor = document.querySelector(`#cursor`);
+        if(!$cursor) {
+          $cursor = document.createElement(`div`);
+          $cursor.classList.add(`cursor`);
+          $cursor.setAttribute(`id`, `cursor`);
+          document.body.appendChild($cursor);
+        }
+        $cursor.style.left = `${data.x * window.innerWidth}px`;
+        $cursor.style.top = `${data.y * window.innerHeight}px`;
+      });
+    };
+
+    init();
+  }
+  </script>
+</body>
+</html>
