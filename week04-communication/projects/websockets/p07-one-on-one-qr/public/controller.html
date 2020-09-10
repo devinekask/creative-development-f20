@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Socket.io Controller</title>
+  <style>
+    html {
+      box-sizing: border-box;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    .cursor {
+      position: absolute;
+      width: 1rem;
+      height: 1rem;
+      margin-left: -.5rem;
+      margin-right: -.5rem;
+      background: red;
+      border-radius: 50% 50%;
+    }
+  </style>
+</head>
+<body>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+  {
+    const $messages = document.getElementById('messages');
+    
+    let socket; // will be assigned a value later
+    
+    const init = () => {
+      targetSocketId = getUrlParameter('id');
+      if (!targetSocketId) {
+        alert(`Missing target ID in querystring`);
+        return;
+      }
+      socket = io.connect('/');
+      socket.on('connect', () => {
+        console.log(`Connected: ${socket.id}`);
+      });
+      window.addEventListener(`mousemove`, e => handleMouseMove(e));
+      window.addEventListener(`touchmove`, e => handleTouchMove(e));
+    };
+
+    const getUrlParameter = name => {
+      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+      const results = regex.exec(location.search);
+      return results === null ? false : decodeURIComponent(results[1].replace(/\+/g, ' '));
+    };
+
+    const handleMouseMove = e => {
+      if (socket.connected) {
+        socket.emit(`update`, targetSocketId, {
+          x: e.clientX / window.innerWidth,
+          y: e.clientY / window.innerHeight
+        });
+      }
+    };
+
+    const handleTouchMove = e => {
+      if (socket.connected) {
+        socket.emit(`update`, targetSocketId, {
+          x: e.touches[0].clientX / window.innerWidth,
+          y: e.touches[0].clientY / window.innerHeight
+        });
+      }
+    };
+
+    init();
+  }
+  </script>
+</body>
+</html>

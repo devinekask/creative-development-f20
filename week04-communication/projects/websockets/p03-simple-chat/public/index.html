@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Socket.io Client</title>
+  <style>
+    html {
+      box-sizing: border-box;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+    #msgForm, #messages {
+      flex: 1 1 100%;
+    }
+    #msgForm {
+      flex-basis: auto;
+      margin-bottom: 1em;
+    }
+  </style>
+</head>
+<body>
+  <form id="msgForm" method="post" action="">
+    <input id="msgInput" type="text" name="msgInput" />
+    <button type="submit">Send Message</button>
+  </form>
+  <textarea id="messages"></textarea>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+  {
+    const $msgForm = document.getElementById('msgForm');
+    const $msgInput = document.getElementById('msgInput');
+    const $messages = document.getElementById('messages');
+    
+    let socket; // will be assigned a value later
+    
+    const init = () => {
+      socket = io.connect('/');
+      socket.on('connect', () => {
+        console.log(`Connected: ${socket.id}`);
+      });
+      socket.on('message', message => {
+        console.log(`Received message: ${message}`);
+        $messages.value += `${message}\n`;
+      });
+      $msgForm.addEventListener('submit', e => handleSubmitMessage(e));
+    };
+
+    const handleSubmitMessage = e => {
+      e.preventDefault();
+      socket.emit('message', $msgInput.value);
+      $msgInput.value = '';
+    };
+
+    init();
+  }
+  </script>
+</body>
+</html>

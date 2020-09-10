@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC</title>
+  <style>
+    #myCamera {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <video id="myCamera" playsinline></video>
+  <script type="module">
+
+    const $myCamera = document.getElementById('myCamera');
+
+    const init = async () => {
+      const constraints = { audio: true, video: { width: 1280, height: 720 } };
+      let mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // // optional: pick a specific camera
+      // const devices = await navigator.mediaDevices.enumerateDevices();
+      // const logitech = devices.find(device => device.kind === 'videoinput' && device.label.toLowerCase().indexOf('webcam') > -1);
+      // if (logitech) {
+      //   constraints.video.deviceId = logitech.deviceId;
+      //   mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      // }
+
+      $myCamera.srcObject = mediaStream;
+      $myCamera.onloadedmetadata = () => $myCamera.play();
+    };
+
+    init();
+
+  </script>
+</body>
+</html>

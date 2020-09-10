@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Bitstamp AJAX</title>
+  </head>
+  <body>
+    <h1>Waiting for trades to happen...</h1>
+    <script>
+    {
+      const $h1 = document.querySelector('h1');
+
+      const apiUrl = `https://api.coindesk.com/v1/bpi/currentprice.json`;
+
+      const poll = async () => {
+        console.log(`Execute poll`);
+        const data = await (await fetch(apiUrl)).json();
+        $h1.innerHTML = `1 BTC = ${data.bpi.EUR.rate} EUR`;
+        setTimeout(() => poll(), 10000);
+      };
+
+      poll();
+
+    }
+    </script>
+  </body>
+</html>

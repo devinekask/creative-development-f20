@@ -13,3 +13,7 @@ Recap workshop using Arduino with an Electron frontend.
 ## [Week 3 - Unity](week03-unity)
 
 Familiarize yourselves with the basics of Unity and C#.
+
+## [Week 4 - Communication](week04-communication)
+
+Real time communication using websockets and WebRTC.

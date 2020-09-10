@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC</title>
+  <style>
+    video {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Receiver</h1>
+  <video id="otherCamera" playsinline autoplay muted></video>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module">
+
+    const $otherCamera = document.getElementById('otherCamera');
+
+    let socket;
+    let peerConnection;
+
+    const servers = {
+      iceServers: [{
+        urls: `stun:stun.l.google.com:19302`
+      }]
+    };
+
+    const init = async () => {
+      initSocket();
+      $otherCamera.addEventListener('click', () => {
+        $otherCamera.play();
+      });
+    };
+
+    const initSocket = () => {
+      socket = io.connect(`/`);
+      socket.on(`connect`, () => {
+        console.log(socket.id);
+      });
+      socket.on('peerOffer', (myId, offer, peerId) => {
+        console.log(`Received peerOffer from ${peerId}`);
+        answerPeerOffer(myId, offer, peerId);
+      });
+      socket.on('peerIce', (myId, candidate, peerId) => {
+        console.log(`Received peerIce from ${peerId}`, candidate);
+        handlePeerIce(myId, candidate, peerId);
+      });
+    };
+
+    const answerPeerOffer = async (myId, offer, peerId) => {
+      peerConnection = new RTCPeerConnection(servers);
+      peerConnection.onicecandidate = (e) => {
+        console.log('ice candidate', e.candidate);
+        socket.emit('peerIce', peerId, e.candidate);
+      };
+      peerConnection.ontrack = (e) => {
+        console.log('ontrack');
+        $otherCamera.srcObject = e.streams[0];
+      };
+      await peerConnection.setRemoteDescription(offer);
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit(`peerAnswer`, peerId, answer);
+    };
+
+    const handlePeerIce = async (myId, candidate, peerId) => {
+      if (!candidate) {
+        return;
+      }
+      await peerConnection.addIceCandidate(candidate);
+    };
+
+    init();
+
+  </script>
+</body>
+</html>

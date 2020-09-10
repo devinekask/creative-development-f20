@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Socket.io Client</title>
+  <style>
+    html {
+      box-sizing: border-box;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    .container {
+      display: none;
+      padding: 1em;
+    }
+    .container--visible {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    #container-name {
+      align-items: center;
+      justify-content: center;
+    }
+    #msgForm, #messages {
+      flex: 1 1 100%;
+    }
+    #msgForm {
+      flex-basis: auto;
+      margin-bottom: 1em;
+    }
+  </style>
+</head>
+<body>
+  <div id="container-name" class="container container--visible">
+    <form id="nameForm" method="post" action="">
+      <input id="nameInput" type="text" name="nameInput" placeholder="your name" />
+      <button type="submit">Connect</button>
+    </form>
+  </div>
+  <div id="container-chat" class="container">
+    <form id="msgForm" method="post" action="">
+      <input id="msgInput" type="text" name="msgInput" />
+      <button type="submit">Send Message</button>
+    </form>
+    <textarea id="messages"></textarea>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+  {
+    const $nameContainer = document.getElementById('container-name');
+    const $chatContainer = document.getElementById('container-chat');
+    const $nameForm = document.getElementById('nameForm');
+    const $nameInput = document.getElementById('nameInput');
+    const $msgForm = document.getElementById('msgForm');
+    const $msgInput = document.getElementById('msgInput');
+    const $messages = document.getElementById('messages');
+    
+    let socket; // will be assigned a value later
+    
+    const init = () => {
+      socket = io.connect('/');
+      socket.on('connect', () => {
+        console.log(`Connected: ${socket.id}`);
+      });
+      socket.on('name', name => {
+        console.log(`Received name: ${name}`);
+        $nameContainer.classList.remove('container--visible');
+        $chatContainer.classList.add('container--visible');
+      });
+      socket.on('message', (sender, message) => {
+        console.log(`Received message: ${message}`);
+        $messages.value += `<${sender.name}> ${message}\n`;
+      });
+      $nameForm.addEventListener('submit', e => handleSubmitName(e));
+      $msgForm.addEventListener('submit', e => handleSubmitMessage(e));
+    };
+
+    const handleSubmitName = e => {
+      e.preventDefault();
+      socket.emit('name', $nameInput.value);
+    };
+
+    const handleSubmitMessage = e => {
+      e.preventDefault();
+      socket.emit('message', $msgInput.value);
+      $msgInput.value = '';
+    };
+
+    init();
+  }
+  </script>
+</body>
+</html>

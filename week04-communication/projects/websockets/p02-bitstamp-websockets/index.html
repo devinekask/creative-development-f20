@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Bitstamp Websockets</title>
+  </head>
+  <body>
+    <h1>Waiting for trades to happen...</h1>
+    <script>
+    {
+      const $title = document.querySelector(`h1`);
+
+      const webSocketUrl = `wss://ws.bitstamp.net`;
+      const socket = new WebSocket(webSocketUrl);
+
+      socket.addEventListener(`open`, event => {
+        console.log(`Socket open`);
+        // Send a message to subscribe
+        const msg = {
+          event: "bts:subscribe",
+          data: {
+            channel: "live_trades_btcusd"
+          }
+        };
+        socket.send(JSON.stringify(msg));
+      });
+
+      socket.addEventListener(`message`, event => {
+        const data = JSON.parse(event.data);
+        if (data.event === `trade`) {
+          const tradeData = data.data;
+          console.log(tradeData);
+          $title.innerHTML = `
+            ${tradeData.amount} BTC<br />
+            @<br />
+            ${tradeData.price_str} USD<br />
+            (= ${(tradeData.amount * tradeData.price).toFixed(2)} USD)`;
+          return;
+        }
+        console.log(data);
+      });
+
+    }
+    </script>
+  </body>
+</html>

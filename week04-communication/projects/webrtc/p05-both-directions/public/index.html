@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC</title>
+  <style>
+    video {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <h1>My Camera</h1>
+    <video id="myCamera" playsinline autoplay muted></video>
+  </div>
+  <div>
+    <label for="peerSelect">Peer: </label><select id="peerSelect"></select>
+  </div>
+  <div>
+    <h1>Other Camera</h1>
+    <video id="otherCamera" playsinline autoplay muted></video>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.7.2/simplepeer.min.js" integrity="sha512-RZlErEuUwWv3EhGNhvni9vinu0QPwNU0OyWAlhTeezEToTZu/C+/Mn7ItRFmpcf8MTK0J2kRalSfzrpQqF7wJQ==" crossorigin="anonymous"></script>
+  <script type="module">
+
+    const $myCamera = document.getElementById('myCamera');
+    const $otherCamera = document.getElementById('otherCamera');
+    const $peerSelect = document.getElementById('peerSelect');
+
+    let socket;
+    let myStream;
+    let peer;
+
+    const servers = {
+      iceServers: [{
+        urls: 'stun:stun.l.google.com:19302'
+      }]
+    };
+
+    const init = async () => {
+      initSocket();
+      $peerSelect.addEventListener('input', callSelectedPeer);
+      const constraints = { audio: true, video: { width: 1280, height: 720 } };
+      myStream = await navigator.mediaDevices.getUserMedia(constraints);
+      $myCamera.srcObject = myStream;
+      $myCamera.onloadedmetadata = () => $myCamera.play();
+    };
+
+    const initSocket = () => {
+      socket = io.connect('/');
+      socket.on('connect', () => {
+        console.log(socket.id);
+      });
+      socket.on('clients', updatePeerList);
+      socket.on('client-disconnect', (client) => {
+        if (peer && peer.data.id === client.id) {
+          peer.destroy();
+        }
+      });
+      socket.on('signal', async (myId, signal, peerId) => {
+        console.log(`Received signal from ${peerId}`);
+        console.log(signal);
+        if (peer) {
+          peer.signal(signal);
+        } else if (signal.type === 'offer') {
+          createPeer(false, peerId);
+          peer.signal(signal);
+        }
+      });
+    };
+
+    const updatePeerList = (clients) => {
+      $peerSelect.innerHTML = '<option value="none">--- Select Peer To Call ---</option>';
+      for (const clientId in clients) {
+        const isMyOwnId = (clientId === socket.id);
+        if (clients.hasOwnProperty(clientId) && !isMyOwnId) {
+          const client = clients[clientId];
+          const $option = document.createElement('option');
+          $option.value = clientId;
+          $option.textContent = clientId;
+          $peerSelect.appendChild($option);
+        }
+      }
+    };
+
+    const callSelectedPeer = async () => {
+      if ($peerSelect.value === 'none') {
+        if (peer) {
+          peer.destroy();
+          return;
+        }
+      }
+      console.log('call selected peer', $peerSelect.value);
+
+      createPeer(true, $peerSelect.value);
+    };
+
+    const createPeer = (initiator, peerId) => {
+      peer = new SimplePeer({ initiator, stream: myStream });
+      peer.data = {
+        id: peerId
+      };
+      peer.on('signal', data => {
+        socket.emit('signal', peerId, data);
+      });
+      peer.on('stream', stream => {
+        $otherCamera.srcObject = stream;
+      });
+      peer.on('close', () => {
+        console.log('closed');
+        peer.destroy();
+        peer = null;
+      });
+      peer.on('error', () => {
+        console.log('error');
+      });
+    };
+
+    init();
+
+  </script>
+</body>
+</html>

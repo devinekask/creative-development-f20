@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC</title>
+  <style>
+    video {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sender</h1>
+  <video id="myCamera" playsinline autoplay muted></video>
+  <label for="peerSelect">Peer: </label><select id="peerSelect"></select>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module">
+
+    const $myCamera = document.getElementById('myCamera');
+    const $peerSelect = document.getElementById('peerSelect');
+
+    let socket;
+    let myStream;
+    let peerConnection;
+
+    const servers = {
+      iceServers: [{
+        urls: 'stun:stun.l.google.com:19302'
+      }]
+    };
+
+    const init = async () => {
+      initSocket();
+      $peerSelect.addEventListener('input', callSelectedPeer);
+      const constraints = { audio: true, video: { width: 1280, height: 720 } };
+      myStream = await navigator.mediaDevices.getUserMedia(constraints);
+      $myCamera.srcObject = myStream;
+    };
+
+    const initSocket = () => {
+      socket = io.connect('/');
+      socket.on('connect', () => {
+        console.log(socket.id);
+      });
+      socket.on('clients', updatePeerList);
+
+      socket.on('peerAnswer', async (myId, answer, peerId) => {
+        console.log('Received peerAnswer from ${peerId}');
+        console.log(answer);
+        await handlePeerAnswer(myId, answer, peerId);
+      });
+
+      socket.on('peerIce', async (myId, candidate, peerId) => {
+        console.log(`Received peerIce from ${peerId}`, candidate);
+        await handlePeerIce(myId, candidate, peerId);
+      });
+    };
+
+    const updatePeerList = (clients) => {
+      $peerSelect.innerHTML = '<option value="none">--- Select Peer To Call ---</option>';
+      for (const clientId in clients) {
+        const isMyOwnId = (clientId === socket.id);
+        if (clients.hasOwnProperty(clientId) && !isMyOwnId) {
+          const client = clients[clientId];
+          const $option = document.createElement('option');
+          $option.value = clientId;
+          $option.textContent = clientId;
+          $peerSelect.appendChild($option);
+        }
+      }
+    };
+
+    const callSelectedPeer = () => {
+      if ($peerSelect.value === 'none') {
+        // TODO: disconnect
+        return;
+      }
+      console.log('call selected peer', $peerSelect.value);
+
+      callPeer($peerSelect.value);
+    };
+
+    const callPeer = async (peerId) => {
+      peerConnection = new RTCPeerConnection(servers);
+      // add the video stream
+      for (const track of myStream.getTracks()) {
+        peerConnection.addTrack(track, myStream);
+      }
+      peerConnection.onicecandidate = (e) => {
+        console.log('ice candidate', e.candidate);
+        socket.emit('peerIce', peerId, e.candidate);
+      };
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit('peerOffer', peerId, offer);
+    };
+
+    const handlePeerAnswer = async (myId, answer, peerId) => {
+      await peerConnection.setRemoteDescription(answer);
+    };
+
+    const handlePeerIce = async (myId, candidate, peerId) => {
+      if (!candidate) {
+        return;
+      }
+      await peerConnection.addIceCandidate(candidate);
+    };
+
+    init();
+
+  </script>
+</body>
+</html>
