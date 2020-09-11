@@ -4,7 +4,7 @@ This course is the finalizing technical / coding course at Devine. We'll teach y
 
 ## [Week 1 - Arduino](week01-arduino)
 
-Recap workshop using Arduino with an Electron frontend.
+Arduino Recap workshop.
 
 ## [Week 2 - WebGL](week02-webgl)
 
