@@ -17,3 +17,6 @@ Familiarize yourselves with the basics of Unity and C#.
 ## [Week 4 - Communication](week04-communication)
 
 Real time communication using websockets and WebRTC.
+
+## [Week 5 - AI](week05-ai)
+
