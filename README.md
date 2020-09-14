@@ -20,3 +20,12 @@ Real time communication using websockets and WebRTC.
 
 ## [Week 5 - AI](week05-ai)
 
+Introduction in practical AI / ML for interactive pieces.
+
+## Week 6 - Capita Selecta
+
+You'll present your research on a given library / framework
+
+## Week 7 - Personal Project Pitch
+
+Pitch your ideas for your final personal project you'll be working on during the second half of the semester
