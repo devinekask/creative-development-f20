@@ -480,7 +480,82 @@ gl.uniform1f(effectFactorLocation, properties.effectFactor);
 
 ## Kernels
 
+Up until now, we've modified the color of a pixel with an operation which multiplies the original pixel with a matrix.
 
+The next step is look at adjacent pixels, and take those color values into account as well. This way you can create effects such as edge detection (high contrast with adjacent pixel means there is an edge) and blur effects (calculate the color as an average color of adjacent pixels).
+
+Work through the steps at [webgl image processing](https://webglfundamentals.org/webgl/lessons/webgl-image-processing.html), starting from the alinea _"What if we want to do image processing that actually looks at other pixels?"_.
+
+## 2D Displacement maps
+
+Another technique to modify pixel colors is through displacement maps. Instead of using a matrix or a buffer as an input modifyer, you can use a second texture as a data source. You can use the color value of this second texture as a modification value for the sampled color of your main texture.
+
+In the fragment shader, you'll have 2 images: the image itself and a displacement texture:
+
+```glsl
+uniform sampler2D texture;
+uniform sampler2D disp;
+```
+
+The sampling position gets influenced by the red channel of the displacement texture:
+
+```glsl
+float effectFactor = 0.05;
+vec2 distortedPosition = vec2(uv.x + disp.r * effectFactor, uv.y);
+gl_FragColor = texture2D(texture, distortedPosition);
+```
+
+Applying a black and white displacement map such as the one below:
+
+![black and white stripes](images/webgl-displacement.png)
+
+Would result in the effect below:
+
+![effect of displacement map](images/webgl-displacement-result.jpg)
+
+Things get even more interesting when you start animating the displacement factor from the shader. You can animate the uniform value on hover, like we did in the previous project:
+
+```javascript
+canvas.addEventListener('mouseover', () => gsap.to(properties, { duration: 1, ease: "power4.out", effectFactor: 1}));
+canvas.addEventListener('mouseout', () => gsap.to(properties, { duration: 1, ease: "power4.out", effectFactor: 0}));
+```
+
+On hover, you'll get the following effect:
+
+![animated displacement effect](images/webgl-displacement-hover.gif)
+
+Try implementing this displacement effect by yourself. There's a couple of displacement maps for you to test in the [2d/images/displacement](2d/images/displacement) folder.
+
+### Displacement transition between images
+
+You could also mix 2 images using this displacement value. To do so, you would add yet another texture, so you'd have 3:
+
+- image 1
+- image 2
+- displacement map
+
+In the fragment shader logic, you would calculate 2 displacement positions. One of them being the inverse-effect-position (by doing 1.0 minus the displacement factor):
+
+```glsl
+vec4 disp = texture2D(disp, uv);
+vec2 distortedPosition = vec2(uv.x + dispFactor * (disp.r*effectFactor), uv.y);
+vec2 distortedPosition2 = vec2(uv.x - (1.0 - dispFactor) * (disp.r*effectFactor), uv.y);
+```
+
+You would then use these two distortedPosition vectors to sample a color from each of the 2 images:
+
+```glsl
+vec4 _texture = texture2D(texture, distortedPosition);
+vec4 _texture2 = texture2D(texture2, distortedPosition2);
+```
+
+And use the mix function to interpolate between the two:
+
+```glsl
+gl_FragColor = mix(_texture, _texture2, dispFactor);
+```
+
+![displacement effect between two images](images/displacement-2-images.gif)
 
 # WebGL 3D - Three.js
 
