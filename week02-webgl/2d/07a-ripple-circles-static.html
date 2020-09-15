@@ -8,7 +8,6 @@
 </head>
 <body>
   <canvas id="c"></canvas>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.0/gsap.min.js" integrity="sha512-JO6JyFPJupQKZf7icgZkHwuq/rAQxH7COqvEd4WdK52AtHPedwHog05T69pIelI69jVN/zZbW6TuHfH2mS8j/Q==" crossorigin="anonymous"></script>
 
   <script>
   {
@@ -58,24 +57,16 @@
 
     uniform sampler2D texture;
 
-    uniform float dispFactor;
-    uniform float effectFactor;
-
-    uniform float phase;
-
     varying vec2 uv;
     
     void main() {
 
       float distance = length(uv - vec2(0.5, 0.5));
+      vec4 disp = vec4(1.0, 1.0, 1.0, 1.0);
+      disp.rgb *= sin(distance * 20.0);
 
-      vec4 disp = vec4(0.02, 0.02, 0.02, 0.02);
-      disp.rgb *= sin(distance * 20.0 + phase);
-
-      vec2 distortedPosition = vec2(uv.x + dispFactor * (disp.r*effectFactor), uv.y);
-      vec4 _texture = texture2D(texture, distortedPosition);
-
-      gl_FragColor = _texture;
+      gl_FragColor = disp;
+      // gl_FragColor = texture2D(texture, uv);
     }
     `);
     const program = createProgram(gl, vertexShader, fragmentShader);
@@ -83,18 +74,6 @@
     const positionBuffer = gl.createBuffer();
     const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
     const texCoordBuffer = gl.createBuffer();
-
-    const effectFactorLocation = gl.getUniformLocation(program, "effectFactor");
-    const dispFactorLocation = gl.getUniformLocation(program, "dispFactor");
-
-    const phaseLocation = gl.getUniformLocation(program, "phase");
-
-    const properties = {
-      effectFactor: -0.65,
-      dispFactor: 0.0
-    };
-
-    let phase = 0;
 
     const init = async () => {
       const imgTexture = await loadImage("images/devine_selectie-087.jpg");
@@ -108,6 +87,7 @@
             -1.0, 1.0,
             1.0, 1.0,
             -1.0, -1.0,
+
             -1.0, -1.0,
             1.0, 1.0,
             1.0, -1.0
@@ -133,27 +113,18 @@
       gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
 
       uploadImageToTexture(imgTexture, "texture", 0);
-      gl.uniform1f(effectFactorLocation, properties.effectFactor);
 
       canvas.width = imgTexture.width;
       canvas.height = imgTexture.height;
-
-      canvas.addEventListener('mouseover', () => gsap.to(properties, { duration: 1, ease: Power4.easeOut, dispFactor: 1}));
-      canvas.addEventListener('mouseout', () => gsap.to(properties, { duration: 1, ease: Power4.easeOut, dispFactor: 0}));
 
       drawScene();
     };
 
     const drawScene = () => {
-      phase++;
-
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.useProgram(program);
-      
-      gl.uniform1f(dispFactorLocation, properties.dispFactor);
-      gl.uniform1f(phaseLocation, phase / 10);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -168,6 +139,8 @@
         img.src = src;
       });
     };
+
+    const map = (value, x1, y1, x2, y2) => (value - x1) * (y2 - x2) / (y1 - x1) + x2;
 
     const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
       const u_imageLoc = gl.getUniformLocation(program, uniformName);

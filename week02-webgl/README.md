@@ -557,6 +557,82 @@ gl_FragColor = mix(_texture, _texture2, dispFactor);
 
 ![displacement effect between two images](images/displacement-2-images.gif)
 
+## Ripple effect
+
+Up until now, we've used textures as input for our origin image and displacement map. Using some creative math, you can also generate pixel colors yourself.
+
+Restart from the basic show image project.
+
+We'll create some concentric ovals, using just math. In your fragment shader, calculate the distance of the uv coordinate to the center uv:
+
+```glsl
+float distance = length(uv - vec2(0.5, 0.5));
+```
+
+Using a `sin` function, we can calculate the sine waveform from that distance. When multiplying this with a vec4 and setting that as the gl_FragColor you can visualize the results:
+
+```glsl
+vec4 disp = vec4(1.0, 1.0, 1.0, 1.0);
+disp.rgb *= sin(distance);
+gl_FragColor = disp;
+```
+
+You should see a fade from a black center to a grey border:
+
+![fade from black to grey](images/sine-fade.jpg)
+
+Our distance will be a value between 0 and 0.5, which is quite a small range for the sine function. If you multiply this value with a larger number, things become more interesting:
+
+```glsl
+disp.rgb *= sin(distance * 20.0);
+```
+
+![concentric ovals](images/sine-circles.jpg)
+
+We can animate these circles, by adding a "phase offset" to the sine calculation.
+
+Define a new uniform float phase:
+
+```glsl
+uniform float phase;
+```
+
+And add this uniform value to the sine calculation:
+
+```glsl
+disp.rgb *= sin(distance * 20.0 + phase);
+```
+
+In your javascript, you'll need to reference this uniform, so store it's location in a global const:
+
+```javascript
+const phaseLocation = gl.getUniformLocation(program, "phase");
+```
+
+In the drawloop, we'll update this value. You can take advantage of the fact that requestAnimationFrame receives a timing offset in the function call. So change the signature of the drawScene to capture this time:
+
+```javascript
+const drawScene = (time = 0) => {
+```
+
+And pass it to the phase uniform, before doing drawArrays. Make sure to divide it by a factor, otherwise the circle will move too fast:
+
+```javascript
+gl.uniform1f(phaseLocation, time / 100);
+```
+
+You should see the circles moving:
+
+![circles moving](images/circles-moving.gif)
+
+We've now got an animating, black and white image... We can use this as an input for a displacement effect!
+
+Take a look at the previous exercise, where you used a texture value as displacement factor (the single image, not the transition between images). Use our concentric circle as the displacement factor. You should have the following result:
+
+![circles displacement](images/circles-displacement.gif)
+
+As a final step, try adding hover interaction to the page, so the effect only triggers when hovering over the image.
+
 # WebGL 3D - Three.js
 
 Survived the WebGL 2D part? Let's add the 3rd dimension to our apps!
