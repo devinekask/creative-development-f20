@@ -633,6 +633,136 @@ Take a look at the previous exercise, where you used a texture value as displace
 
 As a final step, try adding hover interaction to the page, so the effect only triggers when hovering over the image.
 
+## Warp effect
+
+As a next exercise, we want to create a warp effect - as described at https://stackoverflow.com/questions/46857876/old-school-tv-edge-warping-effect
+
+Start off from the [basic image example](2d/02-image.html). We're only interested in the warping effect, we'll ignore the horizontal stripes and color shift.
+
+In the stackoverflow post you'll find the following block of shader code:
+
+```glsl
+vec2 ndc_pos = vertPos;
+vec2 testVec = ndc_pos.xy / max(abs(ndc_pos.x), abs(ndc_pos.y));
+float len = max(1.0,length( testVec ));
+ndc_pos *= mix(1.0, mix(1.0,len,max(abs(ndc_pos.x), abs(ndc_pos.y))), u_distortion);
+vec2 texCoord = vec2(ndc_pos.s, -ndc_pos.t) * 0.5 + 0.5;
+```
+
+In the shader code above, they're using the xy vertex position in the fragment shader. In order to access this, you can pass it as a varying from the vertex shader to the fragment shader.
+
+Define the vertPos as a varying vec2 in __both__ your vertex and fragment shader:
+
+```glsl
+varying vec2 vertPos;
+```
+
+Set this vertPos at the end of the main() function of your __vertex__ shader:
+
+```glsl
+vertPos = gl_Position.xy;
+```
+
+You'll need a `uniform float u_distortion` in the fragement shader as well:
+
+```glsl
+uniform float u_distortion;
+```
+
+Get this uniform location in your javascript code, and initialize it to a value of 1.0. You should see something like this:
+
+![basic warp with repeating sides](images/warp-01.jpg)
+
+If you take a closer look at the edges, you'll notice that the pixels are repeating (for example: look at the floor on the bottom right of the image). That's because our shader is sampling colors outside of the 0-1 uv coordinate space, and falls back to the last available pixel for the edge.
+
+A quick approach is by adding a couple of if-statements and multiplying the color by 0 if the `texCoord` falls outside of our 0-1 range:
+
+```glsl
+vec4 sampleColor = texture2D(texture, texCoord);
+
+if (texCoord.x < 0.0) {
+  sampleColor *= 0.0;
+}
+
+gl_FragColor = sampleColor;
+```
+
+Write the 3 other statements checking if x and y are between 0 and 1. You should see the following result:
+
+![warp with basic mask](images/warp-02.jpg)
+
+We're kind of there... but not quite yet. You'll see some heavy aliasing at the edges.
+
+![warp aliasing](images/warp-03.jpg)
+
+This is happening because we straight going from a full color to none. We can get rid of this by using a slight "gradient" at the edges.
+
+To make coding a little easier, we'll make our mask visible instead of the resulting image. Replace your previous if/else logic, with the following:
+
+```glsl
+float mask = 1.0;
+
+if (texCoord.x < 0.0) {
+  mask = 0.0;
+}
+if (texCoord.x > 1.0) {
+  mask = 0.0;
+}
+if (texCoord.y < 0.0) {
+  mask = 0.0;
+}
+if (texCoord.y > 1.0) {
+  mask = 0.0;
+}
+
+vec4 maskPreview = vec4(mask, mask, mask, 1.0);
+
+gl_FragColor = maskPreview;
+```
+
+![warp mask previous](images/warp-04.png)
+
+An alternative approach to using if/else statements, is using [the glsl step function](https://thebookofshaders.com/glossary/?search=step). This function takes 2 parameters: an edge (threshold value) and a value. Read more about this at [https://thebookofshaders.com/glossary/?search=step](https://thebookofshaders.com/glossary/?search=step).
+
+Replace the if/else statements, with the following step function call
+
+```glsl
+float mask = 1.0;
+mask *= step(0.0, texCoord.x);
+```
+
+This should give you the result below:
+
+![warp mask one side](images/warp-05.png)
+
+Try figuring out the other 3 step function calls, so you get the same mask as before:
+
+![warp mask previous](images/warp-04.png)
+
+You can [take a peek at the solution](2d/08d-warp-mask-step.html) if you're stuck.
+
+Ok, we're back to an aliased mask... but what we want is a small gradient at the edges. This is where [smoothstep](https://thebookofshaders.com/glossary/?search=smoothstep) comes in. This function expects 3 parameters: 2 parameters describing your threshold space (min and max threshold) and a value. It will create a smooth interpolation for values within the threshold space. Read more about this at [https://thebookofshaders.com/glossary/?search=smoothstep](https://thebookofshaders.com/glossary/?search=smoothstep).
+
+Try implementing this smoothstep yourself, and aim for the following result:
+
+![warp mask with gradient](images/warp-06.jpg)
+
+As always, there's a [solution of the current state](2d/08e-warp-mask-smoothstep.html) available.
+
+If you'd apply the calculate mask float with the sampleColor
+
+```glsl
+gl_FragColor = sampleColor * mask;
+```
+
+you'd get a masked version of the image:
+
+![warp mask applied](images/warp-07.jpg)
+
+We're almost there! Try making the gradient space as small as possible (find the sweet spot between having a small gradient and an aliased edge). See if you can get the warp activate on hover, so you get the following effect:
+
+![warp on hover](images/warp-hover.gif)
+
 # WebGL 3D - Three.js
 
 Survived the WebGL 2D part? Let's add the 3rd dimension to our apps!
