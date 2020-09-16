@@ -8,7 +8,7 @@
 </head>
 <body>
   <canvas id="c"></canvas>
-  <video id="video" src="videos/showreel-2020.mp4" preload="auto" muted autoplay playsinline></video>
+  <video id="video" src="videos/showreel-2020.mp4"></video>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.0/gsap.min.js" integrity="sha512-JO6JyFPJupQKZf7icgZkHwuq/rAQxH7COqvEd4WdK52AtHPedwHog05T69pIelI69jVN/zZbW6TuHfH2mS8j/Q==" crossorigin="anonymous"></script>
 
   <script>
@@ -40,7 +40,7 @@
     };
 
     const canvas = document.querySelector('#c');
-    const $video = document.getElementById('video');
+    const $video = document.querySelector('#video');
     const gl = canvas.getContext('webgl');
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, `
     precision mediump float;
@@ -96,8 +96,6 @@
       dispFactor: 0.0
     };
 
-    let phase = 0;
-
     const init = async () => {
       gl.useProgram(program);
 
@@ -132,9 +130,8 @@
       gl.enableVertexAttribArray(texCoordAttributeLocation);
       gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
 
-      $video.addEventListener('canplay', (event) => {
-        console.log('Video can start, but not sure it will play through.');
-
+      $video.addEventListener('canplay', () => {
+        console.log('can play');
         uploadImageToTexture($video, "texture", 0);
         gl.uniform1f(effectFactorLocation, properties.effectFactor);
 
@@ -146,12 +143,9 @@
 
         drawScene();
       });
-
-      
     };
 
-    const drawScene = () => {
-      phase++;
+    const drawScene = (time = 0) => {
 
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
       gl.clearColor(0, 0, 0, 0);
@@ -159,9 +153,7 @@
       gl.useProgram(program);
       
       gl.uniform1f(dispFactorLocation, properties.dispFactor);
-      gl.uniform1f(phaseLocation, phase / 10);
-
-      uploadImageToTexture($video, "texture", 0);
+      gl.uniform1f(phaseLocation, time / 100);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -177,17 +169,11 @@
       });
     };
 
-    const textures = {};
-
     const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
       const u_imageLoc = gl.getUniformLocation(program, uniformName);
       gl.uniform1i(u_imageLoc, textureUnitIndex);
 
-      if (!textures[uniformName]) {
-        textures[uniformName] = gl.createTexture();
-      }
-
-      const texture = textures[uniformName];
+      const texture = gl.createTexture();
       gl.activeTexture(gl.TEXTURE0 + textureUnitIndex);
       gl.bindTexture(gl.TEXTURE_2D, texture);
     

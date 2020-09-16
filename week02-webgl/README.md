@@ -936,6 +936,149 @@ See where to apply the `canvasScale` number to, in order to get the coordinates 
 
 ## Using videos as textures
 
+You're not just limited to static images as textures: you can use videos as well.
+
+Start off from [the ripple effect solution](2d/07d-ripple-final.html).
+
+Add a video tag below the canvas, you can [use our showreel](2d/videos/showreel-2020.mp4) as a source:
+
+```html
+<video id="video" src="videos/showreel-2020.mp4"></video>
+```
+
+Get a javascript reference to this video tag, similar to how we've referenced the canvas tag:
+
+```javascript
+const $video = document.querySelector('#video');
+```
+
+Get rid of the imgTexture and use this $video element instead:
+
+```javascript
+uploadImageToTexture($video, "texture", 0);
+gl.uniform1f(effectFactorLocation, properties.effectFactor);
+
+canvas.width = $video.width;
+canvas.height = $video.height;
+```
+
+When loading in the browser, you'll notice the canvas has a width and height of 0 (check the element inspector). In your devtools, you'll see the following error:
+
+> WebGL: INVALID_VALUE: texImage2D: no video
+
+This has to do with the fact that the video has not loaded yet when sending it over to our shader.
+
+We'll need to wait for [the canplay event](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/canplay_event) before sending it over to our shader. Wrap the texture upload & the rest of the init function inside of the canplay handler:
+
+```javascript
+$video.addEventListener('canplay', () => {
+  console.log('can play');
+  uploadImageToTexture($video, "texture", 0);
+  gl.uniform1f(effectFactorLocation, properties.effectFactor);
+
+  canvas.width = $video.width;
+  canvas.height = $video.height;
+
+  canvas.addEventListener('mouseover', () => gsap.to(properties, { duration: 1, ease: Power4.easeOut, dispFactor: 1}));
+  canvas.addEventListener('mouseout', () => gsap.to(properties, { duration: 1, ease: Power4.easeOut, dispFactor: 0}));
+
+  drawScene();
+});
+```
+
+You'll still have a canvas size of zero, but you might see the same error:
+
+> can play
+> 
+> WebGL: INVALID_VALUE: texImage2D: no video
+
+You can get the native size of the video through the `.videoWidth` and `.videoHeight` properties. Use those when setting the canvas size instead of just `.width` and `.height`:
+
+```javascript
+canvas.width = $video.videoWidth;
+canvas.height = $video.videoHeight;
+```
+
+At time of writing, adding this resulted in showing the first frame in Safari. In Chrome, I still saw that same `INVALID_VALUE` error.
+
+Adding a `preload` attribute to our video tags fixes the issue in Chrome:
+
+```html
+<video id="video" src="videos/showreel-2020.mp4" preload="auto"></video>
+```
+
+You should see the first frame of the video in all browsers.
+
+### Playing the video
+
+Of course we don't want to show a static frame, we want to play the video. Let's try by adding a `play()` call in the `canplay` handler:
+
+```javascript
+console.log('can play');
+$video.play();
+```
+
+When trying this approach, you'll get an error, indicating the user needs to interact with the document first before video playback is allowed:
+
+> DOMException: play() failed because the user didn't interact with the document first
+
+We could solve this by adding a dedicated play button on the page and starting playback when the user clicks that button. However: if you don't need sound to be active, you still can autoplay videos!
+
+Get rid of that `.play()` call first, and add the html attributes `autoplay`, `muted` and `playsinline` to your video tag:
+
+```html
+<video id="video" src="videos/showreel-2020.mp4" preload="auto" autoplay playsinline muted></video>
+```
+
+Reload the browser, and you should see the video playing. The canvas is still frozen on the first frame though.
+
+### Updating the video texture
+
+When uploading a texture, it passes that texture as a static collection of pixel values, no matter if it's coming from an image or a video tag. You'll need to update the texture during our requestAnimationFrame loop.
+
+Add the upload call before doing drawArray in the drawScene method:
+
+```javascript
+uploadImageToTexture($video, "texture", 0);
+
+gl.drawArrays(gl.TRIANGLES, 0, 6);
+```
+
+Test the app again. At time of writing this works nicely in Google Chrome. In Safari however, the canvas is flashing all over the place.
+
+This has to do with the fact that a new texture instance is created every time we call into uploadImageToTexture. We want to avoid creating new instances 60 times per second of course.
+
+We'll add a check in `uploadImageToTexture` to see if we've created a texture instance for a given name yet. We'll store the texture instances in a dictionary lookup `textures`:
+
+```diff
++ const textures = {};
+
+const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
+  const u_imageLoc = gl.getUniformLocation(program, uniformName);
+  gl.uniform1i(u_imageLoc, textureUnitIndex);
+
++ if (!textures[uniformName]) {
++   textures[uniformName] = gl.createTexture();
++ }
+
++ const texture = textures[uniformName];
+- const texture = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0 + textureUnitIndex);
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+
+  // Set the parameters so we can render any size image.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+  // Upload the image into the texture.
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+};
+```
+
+Try again: the app should run smoothly in all browsers. On hover, you'll see the ripple effect playing on moving content.
+
 # WebGL 3D - Three.js
 
 Survived the WebGL 2D part? Let's add the 3rd dimension to our apps!

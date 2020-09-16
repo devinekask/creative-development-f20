@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>WebGL</title>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <video id="video" src="videos/showreel-2020.mp4" preload="auto" muted autoplay playsinline></video>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.0/gsap.min.js" integrity="sha512-JO6JyFPJupQKZf7icgZkHwuq/rAQxH7COqvEd4WdK52AtHPedwHog05T69pIelI69jVN/zZbW6TuHfH2mS8j/Q==" crossorigin="anonymous"></script>
+
+  <script>
+  {
+
+    const createShader = (gl, type, source) => {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+      if (success) {
+        return shader;
+      }
+      console.error(gl.getShaderInfoLog(shader));
+      gl.deleteShader(shader);
+    };
+
+    const createProgram = (gl, vertexShader, fragmentShader) => {
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      const success = gl.getProgramParameter(program, gl.LINK_STATUS);
+      if (success) {
+        return program;
+      }
+      console.error(gl.getProgramInfoLog(program));
+      gl.deleteProgram(program);
+    };
+
+    const canvas = document.querySelector('#c');
+    const $video = document.getElementById('video');
+    const gl = canvas.getContext('webgl');
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, `
+    precision mediump float;
+    
+    attribute vec2 a_position;
+    attribute vec2 a_texCoord;
+
+    varying vec2 uv;
+    
+    void main() {     
+      gl_Position = vec4(a_position, 1, 1);
+      uv = a_texCoord;
+    }
+    `);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, `
+    precision mediump float;
+
+    uniform sampler2D texture;
+
+    uniform float dispFactor;
+    uniform float effectFactor;
+
+    uniform float phase;
+
+    varying vec2 uv;
+    
+    void main() {
+
+      float distance = length(uv - vec2(0.5, 0.5));
+
+      vec4 disp = vec4(0.02, 0.02, 0.02, 0.02);
+      disp.rgb *= sin(distance * 20.0 + phase);
+
+      vec2 distortedPosition = vec2(uv.x + dispFactor * (disp.r*effectFactor), uv.y);
+      vec4 _texture = texture2D(texture, distortedPosition);
+
+      gl_FragColor = _texture;
+    }
+    `);
+    const program = createProgram(gl, vertexShader, fragmentShader);
+    const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+    const positionBuffer = gl.createBuffer();
+    const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
+    const texCoordBuffer = gl.createBuffer();
+
+    const effectFactorLocation = gl.getUniformLocation(program, "effectFactor");
+    const dispFactorLocation = gl.getUniformLocation(program, "dispFactor");
+
+    const phaseLocation = gl.getUniformLocation(program, "phase");
+
+    const properties = {
+      effectFactor: -0.65,
+      dispFactor: 0.0
+    };
+
+    let phase = 0;
+
+    const init = async () => {
+      gl.useProgram(program);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([
+            -1.0, 1.0,
+            1.0, 1.0,
+            -1.0, -1.0,
+            -1.0, -1.0,
+            1.0, 1.0,
+            1.0, -1.0
+        ]),
+        gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(positionAttributeLocation);
+      gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([
+            0.0, 0.0,
+            1.0, 0.0,
+            0.0, 1.0,
+
+            0.0, 1.0,
+            1.0, 0.0,
+            1.0, 1.0,
+        ]),
+        gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(texCoordAttributeLocation);
+      gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+      $video.addEventListener('canplay', (event) => {
+        console.log('Video can start, but not sure it will play through.');
+
+        uploadImageToTexture($video, "texture", 0);
+        gl.uniform1f(effectFactorLocation, properties.effectFactor);
+
+        canvas.width = $video.videoWidth;
+        canvas.height = $video.videoHeight;
+
+        canvas.addEventListener('mouseover', () => gsap.to(properties, { duration: 1, ease: Power4.easeOut, dispFactor: 1}));
+        canvas.addEventListener('mouseout', () => gsap.to(properties, { duration: 1, ease: Power4.easeOut, dispFactor: 0}));
+
+        drawScene();
+      });
+
+      
+    };
+
+    const drawScene = () => {
+      phase++;
+
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(program);
+      
+      gl.uniform1f(dispFactorLocation, properties.dispFactor);
+      gl.uniform1f(phaseLocation, phase / 10);
+
+      uploadImageToTexture($video, "texture", 0);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      requestAnimationFrame(drawScene);
+    };
+
+    const loadImage = (src) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.addEventListener("load", () => resolve(img));
+        img.addEventListener("error", err => reject(err));
+        img.src = src;
+      });
+    };
+
+    const textures = {};
+
+    const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
+      const u_imageLoc = gl.getUniformLocation(program, uniformName);
+      gl.uniform1i(u_imageLoc, textureUnitIndex);
+
+      if (!textures[uniformName]) {
+        textures[uniformName] = gl.createTexture();
+      }
+
+      const texture = textures[uniformName];
+      gl.activeTexture(gl.TEXTURE0 + textureUnitIndex);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+
+      // Set the parameters so we can render any size image.
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+      // Upload the image into the texture.
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    };
+
+    init();
+  }
+  </script>
+</body>
+</html>
