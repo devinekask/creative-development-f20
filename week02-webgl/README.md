@@ -763,6 +763,97 @@ We're almost there! Try making the gradient space as small as possible (find the
 
 ![warp on hover](images/warp-hover.gif)
 
+## Interactive Masks
+
+As you've seen in the previous exercise, masking in a fragment shader is quite easy: multiply your fragment color with a value between 0 and 1, and you've got a mask.
+
+Let's start from the basic image example again and build our way up.
+
+We've prepared a small black-and-white image, which we'll use as our mask:
+
+![black and white circle](2d/images/mask.jpg)
+
+1. Load this image as an extra texture
+2. Sample it's color at the same uv coordinate as the texture
+3. Use it's red channel as your mask multiplier
+
+You should get the following result:
+
+![basic masked image](images/mask-01.jpg)
+
+By taking the same UV coordinates as the image, we're stretching the mask. We want to keep the original mask size.
+
+To do this, we'll need to know the original size of the mask and the original size of the image.
+
+Create 2 uniforms in your fragment shader to store these sizes:
+
+```glsl
+uniform vec2 textureSize;
+uniform vec2 maskSize;
+```
+
+In your init function, right after uploading your two textures, you should set these uniforms. You'll need to get their locations as well, but I figure you know how to do this by now 😉:
+
+```javascript
+gl.uniform2f(textureSizeLocation, imgTexture.width, imgTexture.height);
+gl.uniform2f(maskSizeLocation, maskTexture.width, maskTexture.height);
+```
+
+Back to the fragment shader. We can now use these sizes to calculate the uv coordinate we need to use in for the mask sample:
+
+```glsl
+vec2 maskScale = maskSize / textureSize;
+vec2 maskCoord = uv / maskScale;
+```
+
+Use this maskCoord as the sample location in your mask texture, so you get the following result:
+
+![mask no longer scaled](images/mask-02.jpg)
+
+Our next step is making the mask follow the cursor position. Add an additional uniform to use as an offset for our mask:
+
+```glsl
+uniform vec2 maskOffset;
+```
+
+and use this maskOffset in the calculation of the maskCoord:
+
+```glsl
+vec2 maskCoord = (uv - maskOffset) / maskScale;
+```
+
+In your init function, you'll add a listener to the `mousemove` event, where you'll set this maskOffset. Try figuring out the correct calculation, based on the event properties, the size of the mask and the size of the canvas. The resulting values should be within the 0-1 coordinate space!
+
+```javascript
+canvas.addEventListener('mousemove', e => {
+  const maskX = // TODO: calculate relative offset x
+  const maskY = // TODO: calculate relative offset y
+
+  console.log(maskX, maskY);
+
+  gl.uniform2f(maskOffsetLocation, maskX, maskY);
+});
+```
+
+![mask follows cursor](images/mask-follows-cursor.gif)
+
+We can also apply distortion effects to our mask. Remember the ripple effect with the circles? When applying this to the mask coordinate, you can get a more interesting animated mask.
+
+```glsl
+float distance = length( uv - vec2(0.5));
+vec4 disp = vec4(0.01, 0.01, 0.01, 0.01);
+disp.rgb *= sin(distance*25.0+phase);
+
+vec2 distortedPosition = vec2(uv.x + disp.r * effectFactor, uv.y + disp.r * effectFactor);
+
+vec2 maskScale = maskSize / textureSize;
+vec2 maskCoord = (distortedPosition - maskOffset) / maskScale;
+```
+
+Try incorporating the distortion to the mask, so you get the following result:
+
+![mask with distortion effect](images/mask-distortion.gif)
+
 # WebGL 3D - Three.js
 
 Survived the WebGL 2D part? Let's add the 3rd dimension to our apps!
