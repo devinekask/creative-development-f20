@@ -1079,6 +1079,104 @@ const uploadImageToTexture = (img, uniformName, textureUnitIndex) => {
 
 Try again: the app should run smoothly in all browsers. On hover, you'll see the ripple effect playing on moving content.
 
+## Using a Shadertoy shader
+
+You can find all sorts of impressive shader demos at https://shadertoy.com. Some of these shaders are proof-of-concept demos of what's possible by just using GLSL, but not necessarily best practices when having an effect in mind. But there are quite a few shaders there we can use as a source of inspiration for our own work.
+
+It's not as simple as just copy/pasting the code in your work, you'll need to do a few tweaks first.
+
+Start off from the basic image example again. We'll implement the shader from https://www.shadertoy.com/view/Xsl3zn in our own code.
+
+![screenshot of Shadertoy code](images/shadertoy-01.jpg)
+
+The main entrypoint of a shadertoy shader is a function called `mainImage` which receives 2 parameters as you can see in the screenshot above:
+
+- `out vec4 fragColor` - assigning this variable will set the output color
+- `in vec2 fragCoord` - this variable contains the x and y coordinate of the pixel
+
+Append the contents of the shadertoy shader to your fragment shader code and reload. You'll get a bunch of errors, such as:
+
+> WebGL: ERROR: 0:20: 'iResolution' : undeclared identifier
+>
+> WebGL: ERROR: 0:20: 'xy' :  field selection requires structure or vector on left hand side
+>
+> WebGL: ERROR: 0:25: 'iTime' : undeclared identifier
+
+A Shadertoy shaders receives a bunch of extra inputs, which are not listed in the code. If you expand the Shader Inputs section, you'll see an overview of these inputs:
+
+![shadertoy inputs](images/shadertoy-02.png)
+
+Look at the shadertoy code itself, and declare the necessary inputs (so: only the ones you're seeing being used) in the top section of your fragment shader code.
+
+You might get an error on the iChannelXXX syntax:
+
+> WebGL: ERROR: 0:8: 'iChannel0' : syntax error
+
+Actually, this should be our texture input. So: get rid of the `uniform samplerXX iChannel0...3` declaration and rename `uniform sampler2D texture;` to `uniform sampler2D iChannel0;`
+
+Another error you'll get is:
+
+> WebGL: ERROR: 0:12: 'texture' : no matching overloaded function found
+
+Make sure to call texture2D instead:
+
+```diff
+- vec2 warp = texture( iChannel0, uv*0.1 + iTime*vec2(0.04,0.03) ).xz;
++ vec2 warp = texture2D( iChannel0, uv*0.1 + iTime*vec2(0.04,0.03) ).xz;
+```
+
+```diff
+- fragColor = vec4( texture( iChannel0, st ).xyz, 1.0 );
++ fragColor = vec4( texture2D( iChannel0, st ).xyz, 1.0 );
+```
+
+The code should run again, but no effect is applied. [Compare with the solution](2d/12b-shadertoy-compiles.html) if you're stuck.
+
+### Calling the mainImage function
+
+We're not calling the mainImage function yet, our main function is still a simple sampler of our texture.
+
+Change the `main()` function, so it calls the `mainImage()` function:
+
+```glsl
+void main() {
+  mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+```
+
+Depending on the order of your fragment shader code, you'll either see a single color, or an error:
+
+> WebGL: ERROR: 0:9: 'mainImage' : no matching overloaded function found
+
+Make sure you move your `main()` function to the bottom of the fragment shader. This way the `mainImage` function will be parsed and known to the `main()` function.
+
+### Providing the correct uniform values
+
+You've added 2 uniforms for this particular shader:
+
+```glsl
+uniform vec3 iResolution;
+uniform float iTime;
+```
+
+Try giving them the correct values from your javascript code. We've used similar inputs in previous exercises 😁
+
+You'll see an upside down version of your image:
+
+![upside down warped image](images/shadertoy-03.jpg)
+
+### Fixing the final issues
+
+Flipping the image vertically is as simple as inverting the `uv.y` coordinate:
+
+```glsl
+uv.y = 1.0 - uv.y;
+```
+
+Don't like the stripe-repeats at the edges? You can implement the `smoothstep` masking approach from earlier!
+
+![final result](images/shadertoy-04.jpg)
+
 # WebGL 3D - Three.js
 
 Survived the WebGL 2D part? Let's add the 3rd dimension to our apps!
