@@ -854,6 +854,88 @@ Try incorporating the distortion to the mask, so you get the following result:
 
 ![mask with distortion effect](images/mask-distortion.gif)
 
+## Selective translation
+
+Another technique we can use it show another region of an image under the mask.
+
+Take a look at the image below (graphics for Volkswagen project by [Bavo Vanderghote](https://www.behance.net/bavo)):
+
+![image with wireframe version at the right](2d/images/vw.jpg)
+
+The left part of the image is a rendered frame, the right part of the image is the wireframe version.
+
+We'll display the rendered section for the most part, underneath our mask we'll show the wireframe version.
+
+Start from [the solution of the previous exercise](2d/09c-mark-animated.html) and load [the volkswagen image](2d/images/vw.jpg) instead.
+
+The canvas is quite large, so auto-size it to the width of the body using some css:
+
+```html
+<style>
+  canvas {
+    width: 100%;
+    height: auto;
+  }
+</style>
+```
+
+In your fragment shader, you'll calculate a new UV coordinate for the left part of the image:
+
+```glsl
+vec2 leftUV = vec2(uv.x / 2.0, uv.y);
+```
+
+Use this `leftUV` coordinate for the color sampling, and comment out the masking factor for now:
+
+```glsl
+gl_FragColor = texture2D(texture, leftUV); // * maskColor.r;
+```
+
+You should get the following result:
+
+![stretched left part of the image](images/mask-wireframe-01.jpg)
+
+We're only seeing the left part, but it is stretched to double it's width. This is because we're using the full width of the image for the textureSize __and__ the canvas.
+
+Adjust the javascript code to divide the width here as well:
+
+```javascript
+gl.uniform2f(textureSizeLocation, imgTexture.width / 2, imgTexture.height);
+
+canvas.width = imgTexture.width / 2;
+```
+
+![image stretching fixed](images/mask-wireframe-02.jpg)
+
+Calculate a `rightUV` as well for displaying the right side of the image, and test rendering this image sample as well:
+
+![image right wireframe section](images/mask-wireframe-03.jpg)
+
+Let's add the masking interaction again. What we'll do is sample both the leftUV and rightUV coordinate, and mix the colors depending on the masking value:
+
+```glsl
+gl_FragColor = mix(texture2D(texture, leftUV), texture2D(texture, rightUV), maskColor.r);
+```
+
+Test the app. You'll notice we're kind-of there, but the mouse coordinates are off for some reason:
+
+![masking works, but with wrong coords](images/mask-wireframe-04.gif)
+
+This has to do with the fact that we've resized our canvas using css. We need to calculate the resulting canvas scale, and apply this scaling to our mouse coordinate as well.
+
+You can calculate the scaling ratio in the mouse move handler as follows:
+
+```javascript
+const canvasSize = canvas.getBoundingClientRect();
+const canvasScale = canvas.width / canvasSize.width;
+```
+
+See where to apply the `canvasScale` number to, in order to get the coordinates working again:
+
+![masking with fixed coords](images/mask-wireframe-05.gif)
+
+## Using videos as textures
+
 # WebGL 3D - Three.js
 
 Survived the WebGL 2D part? Let's add the 3rd dimension to our apps!

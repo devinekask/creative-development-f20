@@ -6,10 +6,9 @@
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>WebGL</title>
   <style>
-    body {
-      /* background-color: purple;
-      background-image: linear-gradient(45deg, rgba(255, 255, 255, 1) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 1) 50%, rgba(255, 255, 255, 1) 75%, transparent 75%, transparent);
-      background-size: 50px 50px; */
+    canvas {
+      width: 100%;
+      height: auto;
     }
   </style>
 </head>
@@ -76,11 +75,15 @@
     varying vec2 uv;
     
     void main() {
-      float distance = length( uv - vec2(0.5));
+
+      vec2 leftUV = vec2(uv.x / 2.0, uv.y);
+      vec2 rightUV = vec2(uv.x / 2.0 + 0.5, uv.y);
+
+      float distance = length( leftUV - vec2(0.5));
       vec4 disp = vec4(0.01, 0.01, 0.01, 0.01);
       disp.rgb *= sin(distance*25.0+phase);
 
-      vec2 distortedPosition = vec2(uv.x + disp.r * effectFactor, uv.y + disp.r * effectFactor);
+      vec2 distortedPosition = vec2(leftUV.x + disp.r * effectFactor, leftUV.y + disp.r * effectFactor);
 
       vec2 maskScale = maskSize / textureSize;
       vec2 maskCoord = (distortedPosition - maskOffset) / maskScale;
@@ -92,7 +95,7 @@
       if (maskCoord.y > 1.0) maskColor.r = 0.0;
       if (maskCoord.y < 0.0) maskColor.r = 0.0;
       
-      gl_FragColor = texture2D(texture, uv) * maskColor.r;
+      gl_FragColor = mix(texture2D(texture, leftUV), texture2D(texture, rightUV), maskColor.r);
     }
     `);
     const program = createProgram(gl, vertexShader, fragmentShader);
@@ -112,7 +115,7 @@
     let frameNr = 0;
 
     const init = async () => {
-      const imgTexture = await loadImage("images/devine_selectie-087.jpg");
+      const imgTexture = await loadImage("images/vw.jpg");
       const imgMask = await loadImage("images/mask.jpg");
 
       gl.useProgram(program);
@@ -152,10 +155,10 @@
       uploadImageToTexture(imgTexture, "texture", 0);
       uploadImageToTexture(imgMask, "mask", 1);
 
-      gl.uniform2f(textureSizeLocation, imgTexture.width, imgTexture.height);
+      gl.uniform2f(textureSizeLocation, imgTexture.width / 2, imgTexture.height);
       gl.uniform2f(maskSizeLocation, imgMask.width, imgMask.height);
 
-      canvas.width = imgTexture.width;
+      canvas.width = imgTexture.width / 2;
       canvas.height = imgTexture.height;
 
       canvas.addEventListener('mousemove', e => {
