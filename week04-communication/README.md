@@ -867,7 +867,7 @@ Finally, make sure to have the .env file and certificate files in a .gitignore:
 ```
 *.crt
 *.key
-.envt
+.env
 ```
 
 Test deployment of your app to an online server, e.g. heroku.
