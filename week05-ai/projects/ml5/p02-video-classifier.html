@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ML5</title>
+</head>
+<body>
+  <video id="video" muted autoplay playsinline></video>
+  <script src="https://unpkg.com/ml5@0.5.0/dist/ml5.min.js"></script>
+  <script>
+  {
+
+    const $video = document.getElementById('video');
+    let classifier, $label;
+
+    const init = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      $video.srcObject = stream;
+
+      $label = document.createElement('h2');
+      document.body.appendChild($label);
+      $label.textContent = 'Loading Mobilenet...';
+
+      classifier = await ml5.imageClassifier('MobileNet');
+      $label.textContent = 'Classifying...';
+      
+      $video.width = video.videoWidth;
+      $video.height = video.videoHeight;
+
+      loop();
+    };
+
+    const loop = async() => {
+      const classifications = await classifier.classify($video, 1);
+      $label.textContent = `${classifications[0].label} (Confidence: ${classifications[0].confidence})`;
+      loop();
+    };
+
+    init();
+  }
+  </script>
+</body>
+</html>
