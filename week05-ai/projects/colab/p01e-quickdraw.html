@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>QuickDraw</title>
+  <style>
+  body {
+    background: #cccccc;
+  }
+  </style>
+</head>
+<body>
+  <h1>Draw</h1>
+  <canvas id="c" width="400" height="400"></canvas>
+  <button id="btnReset">Clear Canvas</button>
+  <ol id="result">
+  </ol>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/1.2.10/tf.min.js" integrity="sha256-HCgGF6GfUpPqCZc05QADRrfxnJ3UO1fqFJUZGx0U8Cc=" crossorigin="anonymous"></script>
+  <script>
+  {
+
+    const $canvas = document.getElementById("c");
+    const ctx = $canvas.getContext("2d");
+
+    const $btnReset = document.getElementById('btnReset');
+    const $result = document.getElementById('result');
+
+    let model, classNames, mouseIsDown = false, coords = [];
+
+    const init = async () => {
+      // uncomment and correct the paths below
+      model = await tf.loadLayersModel('models/quickdraw/model.json');
+      classNames = (await (await fetch('models/quickdraw/class_names.txt')).text()).split("\n").filter(name => name.length > 0);
+
+      $canvas.addEventListener('mousedown', startDrawing);
+      $canvas.addEventListener('mousemove', draw);
+      window.addEventListener('mouseup', stopDrawing);
+      $btnReset.addEventListener('click', resetCanvas);
+
+      resetCanvas();
+    };
+
+    const resetCanvas = () => {
+      coords = [];
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, $canvas.width, $canvas.height);
+    };
+
+    const startDrawing = e => {
+      mouseIsDown = true;
+      ctx.save();
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(e.offsetX, e.offsetY);
+      coords.push({x: e.offsetX, y: e.offsetY});
+    };
+
+    const stopDrawing = e => {
+      if (!mouseIsDown) {
+        return;
+      }
+      mouseIsDown = false;
+      ctx.closePath();
+      ctx.restore();
+      // todo: classify here
+
+      //the minimum boudning box around the current drawing
+      const mbb = getMinBox();
+      //extract the image data 
+      const imgData = ctx.getImageData(mbb.min.x, mbb.min.y,
+                        (mbb.max.x - mbb.min.x), (mbb.max.y - mbb.min.y));
+
+      const predictions = Array.from(model.predict(preprocess(imgData)).dataSync()).map((score, index) => {
+        return {
+          score,
+          label: classNames[index]
+        }
+      }).sort((a, b) => b.score - a.score);
+
+      console.log(predictions);
+      $result.innerHTML = '';
+      for (let i = 0; i < 5; i++) {
+        const $li = document.createElement('li');
+        $li.textContent = `${predictions[i].label} (${Math.floor(predictions[i].score * 100)} %)`;
+        $result.appendChild($li);
+      }
+    };
+
+    const getMinBox = () => {
+	
+      const coorX = coords.map(function(p) {return p.x});
+      const coorY = coords.map(function(p) {return p.y});
+      //find top left corner 
+      const min_coords = {
+        x : Math.min.apply(null, coorX),
+        y : Math.min.apply(null, coorY)
+      }
+      //find right bottom corner 
+      const max_coords = {
+        x : Math.max.apply(null, coorX),
+        y : Math.max.apply(null, coorY)
+      }
+      return {
+        min : min_coords,
+        max : max_coords
+      }
+    };
+
+    const preprocess = (imgData) => {
+      return tf.tidy(()=>{
+        //convert the image data to a tensor 
+        let tensor = tf.browser.fromPixels(imgData, numChannels= 1);
+        //resize to 28 x 28 
+        const resized = tf.image.resizeBilinear(tensor, [28, 28]).toFloat();
+        // Normalize the image 
+        const offset = tf.scalar(255.0);
+        const normalized = tf.scalar(1.0).sub(resized.div(offset));
+        //We add a dimension to get a batch shape 
+        const batched = normalized.expandDims(0);
+        return batched;
+      });
+    }
+
+    const draw = e => {
+      if (!mouseIsDown) {
+        return;
+      }
+      ctx.lineTo(e.offsetX, e.offsetY);
+      ctx.stroke();
+      coords.push({x: e.offsetX, y: e.offsetY});
+    };
+
+    init();
+
+  }  
+  </script>
+</body>
+</html>

@@ -271,7 +271,7 @@ Instead of doing classification, we can also use transfer learning to do regress
 2. Create a regressor instead of a classifier:
 
 ```javascript
-regressor = mobileNet.regression($video);
+regressor = featureExtractor.regression($video);
 ```
 
 3. Every time you click the labelButton, you'll add a sample to the regressor. This will tell the regressor to what numerical value the video currently corresponds:
@@ -509,6 +509,12 @@ Change one of the example blocks and try stylizing an image of your own!
 As a next project, we'll train a model on a cloud GPU, and convert it for usage in Tensorflow.js.
 
 [Zaid Alyafeai](https://twitter.com/zaidalyafeai) has created a [medium post, walking you through the necessary steps to create a QuickDraw recognizer](https://medium.com/tensorflow/train-on-google-colab-and-run-on-the-browser-a-case-study-8a45f9b1474e). Following along with that online guide, which will take you through the necessary steps on Google Colab and provides some Tensorflow.js snippets.
+
+At time of writing we ran into one little issue in the "The Model" section:
+
+> module 'tensorflow._api.v2.train' has no attribute 'AdamOptimizer'
+
+Look for the line `adam = tf.train.AdamOptimizer()` and replace it with `adam = tf.optimizers.Adam()`
 
 Here's a starter html template, which has the drawing logic in place. Fill in the gaps, based on the walkthrough!
 
