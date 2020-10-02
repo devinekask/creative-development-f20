@@ -613,6 +613,8 @@ There are quite a few interesting ML projects you can run on Colab. Here's a cou
 - Text generation: [GPT-2 with javascript interface](https://colab.research.google.com/github/gpt2ent/gpt2colab-js/blob/master/GPT2_with_Javascript_interface_POC.ipynb)
 - Create a cartoon version of yourself: [Toonify](https://www.justinpinkney.com/toonify-yourself/)
 
+If you want to get a deeper understaning of Deep Learning networks, I highly recommend [taking a look at Jeff Heaton's course](https://github.com/jeffheaton/t81_558_deep_learning), which includes Colab notebooks and accompanying Youtube explainer videos.
+
 ## More on Tensorflow.js
 
 - [Coding Traing Playlist: Introduction to TensorFlow.js - Intelligence and Learning](https://www.youtube.com/watch?v=Qt3ZABW5lD0&list=PLRqwX-V7Uu6YIeVA3dNxbR9PYj4wV31oQ)
